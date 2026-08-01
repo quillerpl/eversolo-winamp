@@ -35,6 +35,9 @@ public final class VisualiserView extends View {
     public static final String[] EFFECTS = {"SCOPE", "BARS", "STARS"};
 
     private static final int TRAIL_ALPHA = 38;      // how quickly the last frame fades
+    /** How long the close button stays up after a tap, and what counts as a double tap. */
+    private static final long CHROME_MS = 3000;
+    private static final long DOUBLE_TAP_MS = 400;
     private static final int STARS = 90;
     private static final float BEAT_THRESHOLD = 1.35f;
     private static final long BEAT_GAP_MS = 220;
@@ -46,7 +49,11 @@ public final class VisualiserView extends View {
 
     private float[] bars = new float[19];
     private final float[] shown = new float[19];
+    /** Null once real data has arrived; until then, why there is nothing to see. */
+    private String problem = "waiting for the device";
+    private boolean everHadData = false;
 
+    private long chromeUntil, lastTapAt;
     private float energy, averageEnergy;
     private long lastBeatAt;
     private float beat;                              // 1 on a beat, decaying
@@ -85,6 +92,11 @@ public final class VisualiserView extends View {
     public void setCallbacks(Callbacks c) { this.callbacks = c; }
     public void setButtonScale(int s) { this.buttonScale = Math.max(1, s); invalidate(); }
 
+    /** Shown across the middle when no spectrum has arrived, so it is never just dead. */
+    public void setProblem(String why) {
+        if (!everHadData) { problem = why; invalidate(); }
+    }
+
     public int effect() { return effect; }
 
     public void nextEffect() {
@@ -104,6 +116,8 @@ public final class VisualiserView extends View {
     public void setSpectrum(float[] values) {
         if (values == null || values.length == 0) return;
         bars = values;
+        everHadData = true;
+        problem = null;
 
         float bass = 0f;
         int n = Math.min(4, values.length);
@@ -151,6 +165,7 @@ public final class VisualiserView extends View {
             case 2:  drawStars(c, w, h); break;
             default: drawScope(c, w, h); break;
         }
+        drawProblem(c, w, h);
         drawChrome(c, w, h);
     }
 
@@ -257,17 +272,34 @@ public final class VisualiserView extends View {
         return Color.HSVToColor(hsv);
     }
 
-    /** The two buttons and the effect name. Always there - no hunting for a gesture. */
+    /**
+     * A close button in the corner, and only after a tap.
+     *
+     * The full screen is the point, so nothing sits on top of it permanently; one tap
+     * brings the way out back for three seconds, and a double tap changes the effect.
+     */
     private void drawChrome(Canvas c, int w, int h) {
+        if (System.currentTimeMillis() > chromeUntil) return;
         int bw = GenSprites.BUTTON_W * buttonScale, bh = GenSprites.BUTTON_H * buttonScale;
         int pad = 4 * buttonScale;
-        int y = h - bh - pad;
-        drawButton(c, w - bw - pad, y, bw, bh, "CLOSE");
-        drawButton(c, w - 2 * bw - 2 * pad, y, bw, bh, "NEXT");
+        drawButton(c, w - bw - pad, pad, bw, bh, "CLOSE");
 
+        text.setColor(0xFF9AA0A6);
         text.setTextSize(9f * buttonScale);
         text.setTextAlign(Paint.Align.LEFT);
-        c.drawText(EFFECTS[effect], pad + 4, y + bh * 0.7f, text);
+        c.drawText(EFFECTS[effect] + "  -  double tap to change", pad + 4,
+                pad + bh * 0.7f, text);
+    }
+
+    /** When there is nothing to draw, say why rather than showing a black screen. */
+    private void drawProblem(Canvas c, int w, int h) {
+        if (problem == null) return;
+        text.setColor(0xFF9AA0A6);
+        text.setTextSize(10f * buttonScale);
+        text.setTextAlign(Paint.Align.CENTER);
+        c.drawText("NO SPECTRUM: " + problem.toUpperCase(java.util.Locale.UK),
+                w / 2f, h / 2f, text);
+        text.setTextAlign(Paint.Align.LEFT);
     }
 
     private void drawButton(Canvas c, int x, int y, int w, int h, String label) {
@@ -297,16 +329,26 @@ public final class VisualiserView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         if (e.getActionMasked() != MotionEvent.ACTION_UP) return true;
-        int bw = GenSprites.BUTTON_W * buttonScale, bh = GenSprites.BUTTON_H * buttonScale;
-        int pad = 4 * buttonScale;
-        float x = e.getX(), y = e.getY();
-        int top = getHeight() - bh - pad;
-        if (y >= top && x >= getWidth() - bw - pad) {
+        final long now = System.currentTimeMillis();
+        final int bw = GenSprites.BUTTON_W * buttonScale, bh = GenSprites.BUTTON_H * buttonScale;
+        final int pad = 4 * buttonScale;
+        final float x = e.getX(), y = e.getY();
+
+        // The close button, while it is up.
+        if (now < chromeUntil && y <= pad + bh && x >= getWidth() - bw - pad) {
             if (callbacks != null) callbacks.onClose();
-        } else if (y >= top && x >= getWidth() - 2 * bw - 2 * pad) {
-            nextEffect();
-            if (callbacks != null) callbacks.onNextEffect();
+            return true;
         }
+        if (now - lastTapAt < DOUBLE_TAP_MS) {
+            lastTapAt = 0;
+            nextEffect();
+            chromeUntil = now + CHROME_MS;
+            if (callbacks != null) callbacks.onNextEffect();
+        } else {
+            lastTapAt = now;
+            chromeUntil = now + CHROME_MS;
+        }
+        invalidate();
         return true;
     }
 }

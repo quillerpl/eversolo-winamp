@@ -280,6 +280,9 @@ public final class EversoloHttpEngine implements PlaybackEngine {
     private volatile Thread spectrumPoller;
     private volatile float spectrumPeak = 1f;
     private volatile boolean loggedSpectrumShape = false;
+    private volatile boolean loggedNoArray = false;
+    private volatile boolean loggedZeros = false;
+    private volatile String spectrumProblem = "waiting for the first reply";
 
     /**
      * Start feeding the visualiser.
@@ -338,16 +341,27 @@ public final class EversoloHttpEngine implements PlaybackEngine {
      */
     private float[] fetchSpectrum(int bars) {
         String body = get(BASE + "/ZidooMusicControl/v2/getSpectrum");
-        if (body == null) return null;
+        if (body == null) {
+            spectrumProblem = "no reply from getSpectrum";
+            return null;
+        }
         try {
             if (!loggedSpectrumShape) {
                 loggedSpectrumShape = true;
                 Logs.i(TAG, "getSpectrum first response: "
-                        + body.substring(0, Math.min(400, body.length())));
+                        + body.substring(0, Math.min(600, body.length())));
             }
             JSONObject o = new JSONObject(body);
-            JSONArray a = firstArray(o, "fft_value", "fft_level", "freqs_value", "value");
-            if (a == null || a.length() == 0) return null;
+            JSONArray a = findNumericArray(o, 0);
+            if (a == null || a.length() == 0) {
+                spectrumProblem = "getSpectrum has no numeric array";
+                if (!loggedNoArray) {
+                    loggedNoArray = true;
+                    Logs.w(TAG, "no numeric array in getSpectrum: "
+                            + body.substring(0, Math.min(600, body.length())));
+                }
+                return null;
+            }
 
             // Resample whatever came back into the number of bars the window draws.
             float[] raw = new float[a.length()];
@@ -356,6 +370,22 @@ public final class EversoloHttpEngine implements PlaybackEngine {
                 raw[i] = (float) Math.abs(a.optDouble(i, 0));
                 max = Math.max(max, raw[i]);
             }
+            // dB scales arrive as negatives: optDouble's abs() above already folded them,
+            // but a floor of -60 dB reads better than a raw magnitude.
+            if (max <= 0.0001f) {
+                // A well-formed answer full of zeros. Worth saying out loud: it probably
+                // means the device only computes its FFT while its own visualiser screen
+                // is up, which is a different problem from the endpoint being wrong.
+                spectrumProblem = "getSpectrum returns all zeros";
+                if (!loggedZeros) {
+                    loggedZeros = true;
+                    Logs.w(TAG, "getSpectrum returned " + raw.length
+                            + " values, all zero: "
+                            + body.substring(0, Math.min(300, body.length())));
+                }
+                return null;
+            }
+            spectrumProblem = null;
             spectrumPeak = Math.max(max, spectrumPeak * 0.98f);
             if (spectrumPeak <= 0.0001f) return null;
 
@@ -374,20 +404,52 @@ public final class EversoloHttpEngine implements PlaybackEngine {
         }
     }
 
-    private static JSONArray firstArray(JSONObject o, String... names) {
-        for (String n : names) {
-            JSONArray a = o.optJSONArray(n);
-            if (a != null) return a;
-            JSONObject nested = o.optJSONObject(n);
-            if (nested != null) {
-                for (String m : names) {
-                    JSONArray inner = nested.optJSONArray(m);
-                    if (inner != null) return inner;
-                }
+    /**
+     * The first numeric array of a plausible length, anywhere in the response.
+     *
+     * Written this way because the shape of getSpectrum was never captured: looking for
+     * known key names only works if you know them, and the first attempt - fft_value,
+     * fft_level, freqs_value - found nothing on the real device. Walking the whole document
+     * does not care what the device calls it or how deeply it is wrapped.
+     */
+    private static JSONArray findNumericArray(Object node, int depth) {
+        if (depth > 4) return null;
+        if (node instanceof JSONArray) {
+            JSONArray a = (JSONArray) node;
+            if (a.length() >= 8 && isNumeric(a)) return a;
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray found = findNumericArray(a.opt(i), depth + 1);
+                if (found != null) return found;
+            }
+            return null;
+        }
+        if (node instanceof JSONObject) {
+            JSONObject o = (JSONObject) node;
+            java.util.Iterator<String> keys = o.keys();
+            while (keys.hasNext()) {
+                JSONArray found = findNumericArray(o.opt(keys.next()), depth + 1);
+                if (found != null) return found;
             }
         }
         return null;
     }
+
+    private static boolean isNumeric(JSONArray a) {
+        int checked = Math.min(a.length(), 6);
+        for (int i = 0; i < checked; i++) {
+            Object v = a.opt(i);
+            if (v instanceof Number) continue;
+            if (v instanceof String) {
+                try { Double.parseDouble((String) v); continue; }
+                catch (NumberFormatException e) { return false; }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /** What is wrong with the spectrum feed, for the window to display. Null when fine. */
+    public String spectrumProblem() { return spectrumProblem; }
 
     /**
      * The device reports the bitrate as text - "128.00 Kbps", or "1411.20 Kbps" for a CD

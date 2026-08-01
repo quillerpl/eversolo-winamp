@@ -83,6 +83,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private final PlaylistController controller = new PlaylistController(playlist, engine);
 
     private final MusicLibrary library = new MusicLibrary();
+    private PlaylistStore store;
 
     private MainWindowView mainWindow;
     private PlaylistWindowView playlistWindow;
@@ -104,6 +105,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean showFileName = false;
     private boolean spectrumRunning = false;
     private boolean visAnimating = false;
+    private boolean restoredPlaylist = false;
+    private final Runnable savePlaylist = new Runnable() {
+        @Override public void run() { if (store != null) store.save(playlist); }
+    };
     private final String version;
 
     public WinampUi(Context ctx, Runnable onQuit) {
@@ -184,6 +189,20 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             root.post(() -> fit(w, h));
         });
 
+        // The playlist outlives the app: the device has no queue to keep it in, so it is
+        // written to our own files and read back once the library scan can resolve it.
+        store = new PlaylistStore(ctx.getFilesDir());
+        library.addListener(new MusicLibrary.Listener() {
+            @Override public void onLibraryStatus(String status) { }
+            @Override public void onLibraryReady() {
+                if (restoredPlaylist) return;
+                restoredPlaylist = true;
+                if (store.restore(playlist, library)) {
+                    mainWindow.flashTitle("PLAYLIST RESTORED - " + playlist.size() + " TRACKS");
+                }
+            }
+        });
+
         playlist.addListener(this);
         engine.addListener(this);
         engine.start();
@@ -244,6 +263,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     }
 
     public void destroy() {
+        // Save synchronously here: this is the app being closed, and a debounced write
+        // that has not fired yet would be lost.
+        ui.removeCallbacks(savePlaylist);
+        if (store != null) store.save(playlist);
         marqueeRunning = false;
         spectrumRunning = false;
         engine.stopSpectrum();
@@ -447,6 +470,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             // The browser marks rows that are already in the playlist, so it has to be told
             // when the playlist changes - keeping its scroll position, since this usually
             // happens because the user just pressed ADD and is still looking at the list.
+            // Debounced, because adding a whole artist fires this once per album.
+            ui.removeCallbacks(savePlaylist);
+            ui.postDelayed(savePlaylist, 1500);
+
             Set<String> paths = new HashSet<>();
             for (Track t : playlist.tracks()) paths.add(t.absolutePath);
             browser.setPlaylistPaths(paths);
@@ -474,21 +501,25 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * costs five HTTP requests a second, so it should not run in the background.
      */
     private void updateVisualiser() {
-        boolean lcdVisible = visualiserOn && !playlistOpen && !browserOpen && !visWindowOpen;
-        boolean wanted = (lcdVisible || visWindowOpen) && engine.state().isPlaying();
-        if (wanted == spectrumRunning) return;
-        spectrumRunning = wanted;
-        if (wanted) {
-            // The full-screen show wants every beat it can get; the little LCD analyser
-            // does not, so it is polled gently.
-            engine.startSpectrum(bars -> ui.post(() -> {
-                mainWindow.setSpectrum(bars);
-                visWindow.setSpectrum(bars);
-            }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
-            startVisAnimation();
-        } else {
-            engine.stopSpectrum();
+        boolean lcd = visualiserOn && !playlistOpen && !browserOpen && !visWindowOpen
+                && engine.state().isPlaying();
+        // The full-screen window polls whenever it is up, even paused: without that it
+        // sits there black and there is no way to tell a dead feed from a quiet track.
+        boolean wantPoll = lcd || visWindowOpen;
+        if (wantPoll != spectrumRunning) {
+            spectrumRunning = wantPoll;
+            if (wantPoll) {
+                // The full-screen show wants every beat it can get; the little LCD
+                // analyser does not, so it is polled gently.
+                engine.startSpectrum(bars -> ui.post(() -> {
+                    mainWindow.setSpectrum(bars);
+                    visWindow.setSpectrum(bars);
+                }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
+            } else {
+                engine.stopSpectrum();
+            }
         }
+        if (wantPoll) startVisAnimation();
     }
 
     /** Eases the bars between the frames the device gives us, and lets the peaks fall. */
@@ -497,8 +528,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         visAnimating = true;
         ui.postDelayed(new Runnable() {
             @Override public void run() {
-                if (!spectrumRunning) { visAnimating = false; return; }
-                if (visWindowOpen) visWindow.tick(); else mainWindow.tickVisualiser();
+                if (!spectrumRunning && !visWindowOpen) { visAnimating = false; return; }
+                if (visWindowOpen) {
+                    // Say why the screen is empty rather than leaving it empty.
+                    visWindow.setProblem(engine.spectrumProblem());
+                    visWindow.tick();
+                } else {
+                    mainWindow.tickVisualiser();
+                }
                 ui.postDelayed(this, VIS_FRAME_MS);
             }
         }, VIS_FRAME_MS);
@@ -652,7 +689,12 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onToggleVisualiser() {
             boolean on = !mainWindow.isVisualiserOn();
             setVisualiser(on);
-            mainWindow.flashTitle(on ? "ANALYSER ON" : "ANALYSER OFF");
+            // If the feed is broken, say so here: the analyser window is 16 px tall and
+            // has nowhere to put a message of its own.
+            String problem = engine.spectrumProblem();
+            mainWindow.flashTitle(!on ? "ANALYSER OFF"
+                    : problem == null ? "ANALYSER ON"
+                    : "ANALYSER ON - " + problem.toUpperCase(java.util.Locale.UK));
         }
 
         @Override public void onShuffle() {
@@ -697,6 +739,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         public void onClearList() {
             controller.stopDriving();
             playlist.clear();
+            if (store != null) store.clear();
         }
 
         @Override

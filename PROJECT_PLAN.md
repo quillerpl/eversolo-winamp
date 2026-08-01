@@ -4,9 +4,29 @@
 
 ## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.15-lightshow`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.16-persist`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
+
+### The spectrum feed is the open question
+
+**On the device, nothing draws.** The analyser and the light show both switch on and stay
+empty, which means `getSpectrum` is not giving us anything we can use — its response shape
+was never captured in the API survey, and the first parser looked for `fft_value`,
+`fft_level` and `freqs_value` by name and found none of them.
+
+v0.16 changes the approach and, more importantly, makes the failure legible:
+
+* The parser now **walks the whole response** for the first numeric array of eight or more
+  values, at any depth and under any key. Names it does not know cannot defeat it.
+* It logs the first raw body, and separately logs "no numeric array" and "all zeros",
+  because those are different faults. All zeros most likely means the device only computes
+  its FFT while its own visualiser screen is up — worth testing next with `changVUDisplay`,
+  which is a state-changing call and so needs asking first.
+* The light show **says what is wrong across the middle of the screen** instead of sitting
+  black, and the analyser reports the same thing in the title strip when you switch it on.
+* The animation now runs whenever the window is open, playing or not. Before, nothing ticked
+  unless playback was running, so a dead feed and a paused track looked identical.
 
 ### No MilkDrop or AVS either, and the reason is the same one
 
@@ -140,6 +160,17 @@ these are pixel art the zoom multiplies the *window scale* rather than stretchin
 it, hollow for some. That is also the answer to "did ADD work?" — the message on the bottom
 bar is the other half, and it is drawn *in the window* because this is an overlay above
 everything and a Toast behind it is no feedback at all.
+
+**The playlist survives a restart** (v0.16). The device has no queue to keep it in — that is
+why the app owns the playlist at all — so it is written to the app's own files as an `.m3u`
+of absolute paths, debounced 1.5 s while adding and written synchronously on the way out. It
+is restored once the library scan finishes, because a path is only useful when it can be
+turned back into a Track with its tags; anything since deleted is dropped with a count in
+the log. REM → REM ALL and LIST OPTS → NEW LIST both clear it and delete the saved file.
+
+**The light show's controls** (v0.16): a double tap changes the effect, a single tap brings a
+CLOSE button to the corner for three seconds. The full screen is the point, so nothing sits
+on top of it permanently.
 
 **The two LCDs answer to a tap** (v0.15), as Winamp's did: the clock switches between
 elapsed and remaining — with the minus sign, which really is a 5×1 sliver of pixels at 38,32
