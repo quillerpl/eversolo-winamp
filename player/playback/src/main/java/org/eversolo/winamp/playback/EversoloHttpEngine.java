@@ -282,6 +282,8 @@ public final class EversoloHttpEngine implements PlaybackEngine {
     private volatile boolean loggedSpectrumShape = false;
     private volatile boolean loggedNoArray = false;
     private volatile boolean loggedZeros = false;
+    private volatile boolean loggedLevelOnly = false;
+    private volatile boolean loggedPlayingShape = false;
     private volatile String spectrumProblem = "waiting for the first reply";
 
     /**
@@ -351,9 +353,39 @@ public final class EversoloHttpEngine implements PlaybackEngine {
                 Logs.i(TAG, "getSpectrum first response: "
                         + body.substring(0, Math.min(600, body.length())));
             }
+            // The first response is usually the paused, empty one. The first response
+            // taken while actually playing is the one worth having in the log.
+            if (!loggedPlayingShape && current.isPlaying() && body.length() > 70) {
+                loggedPlayingShape = true;
+                Logs.i(TAG, "getSpectrum while playing: "
+                        + body.substring(0, Math.min(900, body.length())));
+            }
             JSONObject o = new JSONObject(body);
             JSONArray a = findNumericArray(o, 0);
             if (a == null || a.length() == 0) {
+                // Paused or stopped, the device answers with everything empty. That is not
+                // a fault, and saying so beats "no numeric array" as an explanation.
+                if (!current.isPlaying()) {
+                    spectrumProblem = "nothing playing";
+                    return null;
+                }
+                // No bands, but there may still be an overall level. A single number
+                // cannot make a spectrum, so this drives every bar together: a VU meter
+                // wearing the analyser's clothes, which is better than a dead window.
+                double level = o.optDouble("fft_level", 0);
+                if (level > 0) {
+                    spectrumProblem = null;
+                    spectrumPeak = Math.max((float) level, spectrumPeak * 0.98f);
+                    float[] flat = new float[bars];
+                    float v = (float) Math.min(1.0, level / Math.max(0.0001f, spectrumPeak));
+                    for (int i = 0; i < bars; i++) flat[i] = v;
+                    if (!loggedLevelOnly) {
+                        loggedLevelOnly = true;
+                        Logs.i(TAG, "getSpectrum has no bands; driving the analyser from "
+                                + "fft_level alone");
+                    }
+                    return flat;
+                }
                 spectrumProblem = "getSpectrum has no numeric array";
                 if (!loggedNoArray) {
                     loggedNoArray = true;
@@ -405,15 +437,32 @@ public final class EversoloHttpEngine implements PlaybackEngine {
     }
 
     /**
-     * The first numeric array of a plausible length, anywhere in the response.
+     * The first run of numbers of a plausible length, anywhere in the response.
      *
-     * Written this way because the shape of getSpectrum was never captured: looking for
-     * known key names only works if you know them, and the first attempt - fft_value,
-     * fft_level, freqs_value - found nothing on the real device. Walking the whole document
-     * does not care what the device calls it or how deeply it is wrapped.
+     * getSpectrum turned out to nest its data twice over. Asked while paused it answers
+     *
+     *     {"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}
+     *
+     * so fft_value is a *string* holding JSON, and what is inside it is an object rather
+     * than an array. Looking for a key called fft_value and expecting a JSONArray - which
+     * is what the first version did - could never have worked. This walks everything:
+     * arrays, objects keyed by index, and strings that turn out to hold more JSON.
      */
     private static JSONArray findNumericArray(Object node, int depth) {
-        if (depth > 4) return null;
+        if (depth > 5) return null;
+
+        // A string that is really a nested document. The device does this.
+        if (node instanceof String) {
+            String s = ((String) node).trim();
+            if (s.length() < 2) return null;
+            try {
+                if (s.startsWith("[")) return findNumericArray(new JSONArray(s), depth + 1);
+                if (s.startsWith("{")) return findNumericArray(new JSONObject(s), depth + 1);
+            } catch (Exception ignored) {
+                return null;
+            }
+            return null;
+        }
         if (node instanceof JSONArray) {
             JSONArray a = (JSONArray) node;
             if (a.length() >= 8 && isNumeric(a)) return a;
@@ -425,6 +474,10 @@ public final class EversoloHttpEngine implements PlaybackEngine {
         }
         if (node instanceof JSONObject) {
             JSONObject o = (JSONObject) node;
+            // An object whose keys are indices - {"0":12,"1":34,...} - is an array wearing
+            // a disguise, and is a very likely shape for what is inside fft_value.
+            JSONArray byIndex = numbersKeyedByIndex(o);
+            if (byIndex != null) return byIndex;
             java.util.Iterator<String> keys = o.keys();
             while (keys.hasNext()) {
                 JSONArray found = findNumericArray(o.opt(keys.next()), depth + 1);
@@ -432,6 +485,30 @@ public final class EversoloHttpEngine implements PlaybackEngine {
             }
         }
         return null;
+    }
+
+    /** {"0":..,"1":..} in numeric key order, or null if that is not what this is. */
+    private static JSONArray numbersKeyedByIndex(JSONObject o) {
+        int n = o.length();
+        if (n < 8) return null;
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < n; i++) {
+            Object v = o.opt(String.valueOf(i));
+            if (v == null) return null;
+            if (v instanceof Number) { out.put(v); continue; }
+            if (v instanceof String) {
+                try {
+                    out.put(Double.parseDouble((String) v));
+                    continue;
+                } catch (NumberFormatException e) {
+                    return null;
+                } catch (org.json.JSONException e) {
+                    return null;              // a NaN or infinity in the feed
+                }
+            }
+            return null;
+        }
+        return out;
     }
 
     private static boolean isNumeric(JSONArray a) {

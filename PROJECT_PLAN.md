@@ -4,16 +4,29 @@
 
 ## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.16-persist`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.17-fft`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
 
 ### The spectrum feed is the open question
 
-**On the device, nothing draws.** The analyser and the light show both switch on and stay
-empty, which means `getSpectrum` is not giving us anything we can use — its response shape
-was never captured in the API survey, and the first parser looked for `fft_value`,
-`fft_level` and `freqs_value` by name and found none of them.
+**Found it, by asking the device instead of the user.** The LAN API has no authentication,
+so `curl http://<device>:9529/ZidooMusicControl/v2/getSpectrum` answered the question in one
+call — and the answer was two nested surprises:
+
+```json
+{"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}
+```
+
+`fft_value` is a **string holding JSON**, and inside it is an **object**, not an array. Both
+parsers written so far — the one looking for keys by name, and the one walking for arrays —
+were incapable of reading that. v0.17 walks strings-that-are-really-documents and objects
+keyed by index as well, and falls back to driving every bar from `fft_level` when there are
+no bands at all, which is a VU meter wearing the analyser's clothes but beats a dead window.
+
+It was also **paused** when sampled, which is why everything is zero. **The populated shape
+is still uncaptured** — sample it again with music actually playing before trusting any of
+this.
 
 v0.16 changes the approach and, more importantly, makes the failure legible:
 

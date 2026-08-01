@@ -517,6 +517,9 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
             } else {
                 engine.stopSpectrum();
+                // Let the bars fall away rather than freezing on the last frame.
+                mainWindow.setSpectrum(new float[19]);
+                visWindow.setSpectrum(new float[19]);
             }
         }
         if (wantPoll) startVisAnimation();

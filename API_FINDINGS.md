@@ -485,9 +485,22 @@ so this is recorded as unresolved rather than as "DLNA produces no sound".
   screen state; screen state was not a factor at any point.
 * **Poll `getState`** for now-playing, position, volume and state. Roughly 1 s is
   responsive; the whole response is ~2.8 KB.
-* **`getSpectrum` returns live FFT data** (`fft_level`, `fft_value`, `freqs_value`,
-  `nb_freqs`) — genuine Winamp-style spectrum analyser visuals are possible, driven by
-  the device's own DSP.
+* **`getSpectrum` — the response is nested twice, and empty unless something is playing.**
+  Asked while paused, the real device answers:
+
+  ```json
+  {"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}
+  ```
+
+  Note the shapes: `fft_value` and `freqs_value` are **strings holding JSON**, and what is
+  inside them is an **object**, not an array. A parser that looks for a key called
+  `fft_value` and expects a JSON array — which is the obvious first attempt, and was
+  ours — finds nothing and reports the endpoint broken. It is not: it is empty because the
+  device was paused. `fft_level` is a plain number, an overall level rather than bands.
+
+  The populated shape, while playing, is **still uncaptured**. Ask the device directly
+  (`curl http://<device>:9529/ZidooMusicControl/v2/getSpectrum`) with music running, and
+  write down what comes back before writing any more code against it.
 * **Album art:** `getImage?id=<songId>&target=16` returns a PNG. The `target` parameter
   appeared to make no difference (0, 1 and 16 all returned the identical 563 KB image),
   so it may not be a size selector.

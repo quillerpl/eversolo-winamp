@@ -149,10 +149,12 @@ If you find yourself designing something in this list, stop and ask.
     butterchurn calls `getByteTimeDomainData` every frame — and this app never touches the
     audio. Do not promise presets; the light show behind the EQ button is FFT-driven and
     says so.
-13. **`getSpectrum` is real and drives the analyser**, but its response shape was never
-    captured during the survey. The parser takes whatever numeric array it finds and
-    self-calibrates against a decaying peak, and it logs the first raw body: read that in
-    the on-device console and replace the guess with the fact.
+13. **`getSpectrum` nests its data inside strings, and is empty when nothing is playing.**
+    Paused it answers `{"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}` —
+    `fft_value` is a *string* containing JSON, and that JSON is an object, not an array.
+    **You can query the device yourself:** it is on the LAN with no authentication, so
+    `curl http://192.168.1.207:9529/ZidooMusicControl/v2/getSpectrum` beats asking the user
+    to read a log. It is a read, so it is safe; anything that changes state is not.
 14. **Poll it 80 ms full-screen, 180 ms for the LCD analyser**, and let it back off. Safe request spacing is 0.15 s; the window
     eases between frames to look continuous.
 15. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
