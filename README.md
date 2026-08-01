@@ -10,12 +10,13 @@ device's local HTTP API, which bypasses Android's sample-rate conversion and rea
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
 
-> **Status:** running on the author's own DMP-A6. The main window and the playlist editor
-> are confirmed working on the device; the library browser and the spectrum analyser are
-> newer and have not been run on hardware yet. There will be no equalizer — the device's API
-> has no tone control of any kind, and a window full of sliders wired to nothing would
-> contradict the reason this exists. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for exactly
-> where things stand.
+> **Status:** running on the author's own DMP-A6. The three windows are confirmed working
+> on the device. The spectrum analyser is new and has not been run on hardware yet — it
+> decodes the playing file itself, because the device's `getSpectrum` turns out to be a
+> hollow endpoint (`isHasSpectrum` is false on every source). There will be no equalizer:
+> the API has no tone control of any kind, and sliders wired to nothing would contradict
+> the reason this exists. [PROJECT_PLAN.md](PROJECT_PLAN.md) opens with exactly what is
+> untested and in what order.
 
 ---
 
@@ -38,24 +39,21 @@ selected — nothing is reachable only by a gesture. MISC → MISC OPTS scales t
 ×1 / ×1.5 / ×2, because a 13-pixel row is about 3 mm on this screen: fine to read,
 unpleasant to hit.
 
-### Light show
-
-Behind the EQ button, since this device has no equalizer to open: three full-screen effects
-driven by the same FFT, with beat detection on the bass bins.
-
-It is **not** MilkDrop or AVS, and it cannot be. Those read the waveform sixty times a
-second — butterchurn calls `getByteTimeDomainData` every frame and runs its own FFT — and
-this player never touches the audio: the device decodes straight to its DACs, which is the
-point, and hands over a frequency snapshot via HTTP. What is here moves with the music
-without knowing what it looks like.
-
 ### Spectrum analyser
 
 Nineteen bars in the main window's little LCD, coloured from the skin's own `viscolor.txt`,
-with the peak markers falling as they used to. The data is the device's own FFT, from
-`getSpectrum` — polled five times a second, because this is a small box that is also
-decoding audio, with the drawn bars eased between frames at 25 fps so it reads as
-continuous. Tap it to turn it off.
+with the peak markers falling as they used to. Tap it to turn it off.
+
+The data does not come from the device. `getSpectrum` answers `{}` for every source on this
+unit and `getState` reports `isHasSpectrum: false`, yet the stock player's analyser plainly
+works — because the stock player is the thing decoding the audio. So this decodes the same
+file a second time with MediaCodec and runs its own FFT, paced against the wall clock and
+re-seeking whenever it drifts from the position the device reports. Nothing is played and
+nothing touches the output, so the bit-perfect path is untouched.
+
+The FFT and the band mapping live in `:dsp`, a plain-Java module with no Android in it, so
+the maths is proved against sine waves of known pitch on a laptop rather than guessed at on
+a device with no debugger.
 
 ### Library browser
 
@@ -128,7 +126,7 @@ running, which is the quickest way to confirm an install took.
 ### Testing, without a device
 
 ```bash
-./player/tools/run-jvm-tests.sh     # 173 assertions on a desktop JVM
+./player/tools/run-jvm-tests.sh     # 195 assertions on a desktop JVM
 ```
 
 It generates real audio fixtures with ffmpeg and compiles only the Android-free sources: the
@@ -164,6 +162,7 @@ player/                 the app
   tags/                 FLAC and ID3 parsers, .m3u parser   (no Android dependencies)
   playback/             the device's HTTP transport
   playlist/             the playlist model and sequencing   (no Android dependencies)
+  dsp/                  FFT and band mapping                (no Android dependencies)
   skin/                 .wsz parsing, BMP decoding, and the three windows
   tools/                sprite generators, desktop previews, the JVM test runner
 API_FINDINGS.md         the device's HTTP API: endpoints, schemas, limits

@@ -2,7 +2,53 @@
 
 ---
 
-## STATUS — 1 August 2026, night (read this first)
+## STATUS — 2 August 2026 (read this first)
+
+### PICK UP HERE — what is untested, in the order worth testing
+
+Install `~/Downloads/EversoloWinamp.apk` (versionCode 19). The title strip reads
+`EVERSOLO WINAMP 0.19-ANALYSER` with nothing playing; if it does not, the install did not
+take and the versionCode needs bumping again.
+
+**Confirmed working on the device**
+
+* The playlist window, and the browser window with its ×1 / ×1.5 / ×2 zoom.
+* The marks showing what is already in the playlist, and the ADD message.
+* Everything from phases 0–3: library, transport, playlists.
+
+**Built but never run on hardware — this is the whole to-do list**
+
+1. **The analyser (v0.19), and it is the risky one.** `FileSpectrum` decodes the playing
+   file with MediaCodec and runs the FFT in `:dsp`. Three ways it can fail, each with its
+   own symptom:
+   * `CANNOT DECODE THIS FILE` in the title strip → this firmware's MediaCodec will not
+     open FLAC. It cannot read FLAC *tags* either (a different subsystem, but a warning).
+     Fall back: test with an MP3 to separate "no FLAC decoder" from "no decoder at all".
+   * Bars move but lag or jump → the pacing or the 400 ms re-seek threshold in
+     `FileSpectrum.DRIFT_MS`.
+   * Playback stutters → the second decode is too expensive; raise `FFT_SIZE` or emit less
+     often before giving up on it.
+   The maths itself is proved off-device (`FftTest`, 22 assertions), so a wrong-looking
+   display is a decode, sync or scaling problem, not an FFT one.
+2. **The playlist surviving a restart** (v0.16). Add a few tracks, close the app from the
+   main window's X, reopen. Expect `PLAYLIST RESTORED - N TRACKS` once the scan finishes,
+   about 13 s in. Clearing is REM → REM ALL or LIST OPTS → NEW LIST.
+3. **The two LCD taps** (v0.15). Tapping the clock switches elapsed/remaining with a minus
+   sign; tapping the title switches tags/file name. The tags should read
+   *song - album - artist*.
+4. **kbps / kHz / mono-stereo** (v0.12). Never confirmed since the fix.
+5. **SAVE LIST and LOAD LIST** in the playlist window, which write and read `.m3u` in
+   `EverSoloWinamp/playlists`.
+
+**Settled, do not revisit**
+
+* No equaliser: the API has no tone control and `isHasDSP` is false. The EQ button says so.
+* No `getSpectrum`: `{}` on every source, `isHasSpectrum` false. Documented in
+  API_FINDINGS.md with everything that was tried.
+* No MilkDrop or AVS presets: they need the live waveform at frame rate. Note that the file
+  decode in v0.19 *does* give us a waveform, so if the analyser works, a real
+  waveform-driven visualiser becomes possible after all — that is the one thing worth
+  reopening, and only then.
 
 **Build `v0.19-analyser`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
