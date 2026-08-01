@@ -10,9 +10,9 @@ device's local HTTP API, which bypasses Android's sample-rate conversion and rea
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
 
-> **Status:** works and is in daily use. The main window and the playlist editor are
-> confirmed on the device; the library browser is new and not yet run on hardware. The
-> equalizer window and the spectrum analyser are not built. See
+> **Status:** running on the author's own DMP-A6. The main window and the playlist editor
+> are confirmed working on the device; the library browser is new and has not been run on
+> hardware yet. The equalizer window and the spectrum analyser are not built. See
 > [PROJECT_PLAN.md](PROJECT_PLAN.md) for exactly where things stand.
 
 ---
@@ -115,8 +115,9 @@ the app uses:
 ./player/tools/preview/browser_preview.py
 ```
 
-That has caught five real bugs so far, including the wrong skin being bundled, the RLE8
-decoding problem, and buttons one pixel too tall for the frame they sat on.
+That has caught four real bugs so far without an install cycle: the wrong skin being
+bundled, the RLE8 decoding problem, buttons one pixel too tall for the frame they sat on,
+and button labels drawn in the skin's green LCD font, which is unreadable on grey.
 
 Sprite coordinates are **generated, never typed** — `tools/gen-sprites.py` derives the main
 and playlist tables from webamp, and `tools/gen-window-sprites.py` measures the generic
