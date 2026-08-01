@@ -25,6 +25,7 @@ import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.PlaylistWindowView;
 import org.eversolo.winamp.skin.Skin;
 import org.eversolo.winamp.skin.SkinSprites;
+import org.eversolo.winamp.skin.VisualiserView;
 import org.eversolo.winamp.skin.WindowScales;
 import org.eversolo.winamp.skin.ZoomChooser;
 import org.eversolo.winamp.tags.M3uParser;
@@ -65,9 +66,13 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private static final String PREFS = "winamp";
     private static final String PREF_ZOOM = "zoom";
     private static final String PREF_VIS = "visualiser";
+    private static final String PREF_REMAINING = "timeRemaining";
 
-    /** Visualiser animation frame. The device is polled far slower; this smooths it. */
+    /** Visualiser animation frame. The device is polled slower; this smooths between. */
     private static final long VIS_FRAME_MS = 40;
+    /** How often getSpectrum is asked, full-screen and for the little LCD analyser. */
+    private static final int SPECTRUM_FAST_MS = 80;
+    private static final int SPECTRUM_IDLE_MS = 180;
 
     private final Context ctx;
     private final Runnable onQuit;
@@ -82,11 +87,13 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private MainWindowView mainWindow;
     private PlaylistWindowView playlistWindow;
     private BrowserWindowView browserWindow;
+    private VisualiserView visWindow;
     private LibraryBrowser browser;
     private FrameLayout root;
 
     private boolean playlistOpen = false;
     private boolean browserOpen = false;
+    private boolean visWindowOpen = false;
     private boolean marqueeRunning = false;
     private boolean shuffleOn = false;
     private boolean repeatOn = false;
@@ -94,6 +101,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private int laidOutW, laidOutH;
     private int zoom = 0;                   // index into ZoomChooser.LEVELS
     private boolean visualiserOn = true;
+    private boolean showFileName = false;
     private boolean spectrumRunning = false;
     private boolean visAnimating = false;
     private final String version;
@@ -134,6 +142,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setScale(mainScale);
         mainWindow.setCallbacks(new Transport());
         mainWindow.setVisualiserOn(visualiserOn);
+        mainWindow.setShowRemaining(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_REMAINING, false));
         root.addView(mainWindow, centred());
 
         playlistWindow = new PlaylistWindowView(ctx);
@@ -153,6 +163,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setZoom(zoom);
         browserWindow.setVisibility(View.GONE);
         root.addView(browserWindow, centred());
+
+        visWindow = new VisualiserView(ctx);
+        visWindow.setSkin(skin);
+        visWindow.setButtonScale(playlistScale);
+        visWindow.setCallbacks(new VisualiserActions());
+        visWindow.setVisibility(View.GONE);
+        root.addView(visWindow, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         browser = new LibraryBrowser(library, new BrowserHost());
 
@@ -200,6 +218,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         playlistWindow.setGeometry(playlistGeometry());
         browserWindow.setScale(playlistScale);
         browserWindow.setGeometry(browserGeometry());
+        visWindow.setButtonScale(playlistScale);
     }
 
     /**
@@ -236,6 +255,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Back closes one layer at a time; from the bare main window the host quits. */
     public boolean handleBack() {
+        if (visWindowOpen) {
+            closeVisualiserWindow();
+            return true;
+        }
         if (browserOpen) {
             if (browser.up()) return true;      // up a folder before leaving the browser
             closeBrowser();
@@ -306,6 +329,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setVisibility(main ? View.VISIBLE : View.GONE);
         playlistWindow.setVisibility(playlistWin ? View.VISIBLE : View.GONE);
         browserWindow.setVisibility(browserWin ? View.VISIBLE : View.GONE);
+        visWindow.setVisibility(visWindowOpen ? View.VISIBLE : View.GONE);
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
         updateVisualiser();
@@ -350,11 +374,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     public void onState(final PlaybackState s) {
         controller.onState(s);      // the playlist handover lives here
         ui.post(() -> {
-            String title = s.title;
-            if (!s.artist.isEmpty()) title = s.artist + " - " + title;
-            // Nothing playing: say which build is on the device. It costs nothing and it
-            // settles the "did the install take?" question at a glance.
-            if (title.trim().isEmpty()) title = "EVERSOLO WINAMP " + version;
+            String title = nowPlayingText(s);
             mainWindow.setNowPlaying(title, s.positionMs, s.durationMs,
                     s.isPlaying(), s.status == PlaybackState.Status.PAUSED);
             mainWindow.setVolumePercent(s.maxVolume > 0 ? s.volume * 100 / s.maxVolume : 0);
@@ -363,6 +383,37 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             updateVisualiser();
             if (s.isPlaying()) startMarquee();
         });
+    }
+
+    /**
+     * What the title strip says: song, album and artist, or the file name when the user has
+     * tapped it over.
+     *
+     * The tags come from our own parsing where we have them - the whole reason the tag
+     * readers exist is that Android cannot read this device's FLACs - and fall back to what
+     * the device reports for anything we did not start ourselves.
+     */
+    private String nowPlayingText(PlaybackState s) {
+        Track t = playlist.current();
+        if (showFileName) {
+            if (t != null) return t.fileName;
+            if (!s.title.isEmpty()) return s.title;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (t != null) {
+            sb.append(t.title);
+            if (!t.album.isEmpty()) sb.append(" - ").append(t.album);
+            if (!t.artist.isEmpty()) sb.append(" - ").append(t.artist);
+        } else {
+            sb.append(s.title);
+            if (!s.album.isEmpty()) sb.append(" - ").append(s.album);
+            if (!s.artist.isEmpty()) sb.append(" - ").append(s.artist);
+        }
+        String out = sb.toString().trim();
+        while (out.startsWith("-")) out = out.substring(1).trim();
+        // Nothing playing: say which build is on the device. It costs nothing and it
+        // settles the "did the install take?" question at a glance.
+        return out.isEmpty() ? "EVERSOLO WINAMP " + version : out;
     }
 
     /**
@@ -423,12 +474,17 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * costs five HTTP requests a second, so it should not run in the background.
      */
     private void updateVisualiser() {
-        boolean wanted = visualiserOn && !playlistOpen && !browserOpen
-                && engine.state().isPlaying();
+        boolean lcdVisible = visualiserOn && !playlistOpen && !browserOpen && !visWindowOpen;
+        boolean wanted = (lcdVisible || visWindowOpen) && engine.state().isPlaying();
         if (wanted == spectrumRunning) return;
         spectrumRunning = wanted;
         if (wanted) {
-            engine.startSpectrum(bars -> ui.post(() -> mainWindow.setSpectrum(bars)), 19);
+            // The full-screen show wants every beat it can get; the little LCD analyser
+            // does not, so it is polled gently.
+            engine.startSpectrum(bars -> ui.post(() -> {
+                mainWindow.setSpectrum(bars);
+                visWindow.setSpectrum(bars);
+            }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
             startVisAnimation();
         } else {
             engine.stopSpectrum();
@@ -442,10 +498,38 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         ui.postDelayed(new Runnable() {
             @Override public void run() {
                 if (!spectrumRunning) { visAnimating = false; return; }
-                mainWindow.tickVisualiser();
+                if (visWindowOpen) visWindow.tick(); else mainWindow.tickVisualiser();
                 ui.postDelayed(this, VIS_FRAME_MS);
             }
         }, VIS_FRAME_MS);
+    }
+
+    private void openVisualiserWindow() {
+        visWindowOpen = true;
+        spectrumRunning = false;        // reopen the poll at the faster rate
+        engine.stopSpectrum();
+        show(false, false, false);
+        mainWindow.setToggles(playlistOpen, true, shuffleOn, repeatOn);
+        updateVisualiser();
+        startVisAnimation();
+        Logs.i(TAG, "visualiser window opened");
+    }
+
+    private void closeVisualiserWindow() {
+        visWindowOpen = false;
+        spectrumRunning = false;
+        engine.stopSpectrum();
+        show(!playlistOpen && !browserOpen, playlistOpen, browserOpen);
+        mainWindow.setToggles(playlistOpen, false, shuffleOn, repeatOn);
+        updateVisualiser();
+        Logs.i(TAG, "visualiser window closed");
+    }
+
+    private final class VisualiserActions implements VisualiserView.Callbacks {
+        @Override public void onNextEffect() {
+            Logs.i(TAG, "visualiser effect -> " + VisualiserView.EFFECTS[visWindow.effect()]);
+        }
+        @Override public void onClose() { closeVisualiserWindow(); }
     }
 
     private void setVisualiser(boolean on) {
@@ -537,9 +621,32 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
          * exists to avoid: the whole point is that the signal reaches the DACs untouched.
          * So the button says so rather than opening a decoration.
          */
+        /**
+         * There is no equalizer on this device - no tone control of any kind in the API,
+         * and it reports hasDspSetting=false - and a working one would undo the whole
+         * point of the player. So the EQ button opens the light show instead, which is
+         * the other thing that button's neighbourhood was for.
+         */
         @Override public void onToggleEqualizer() {
-            Logs.i(TAG, "EQ button pressed - the device exposes no equalizer");
-            mainWindow.flashTitle("NO EQUALISER - THIS PLAYER STAYS BIT PERFECT");
+            if (visWindowOpen) closeVisualiserWindow(); else openVisualiserWindow();
+        }
+
+        /** Winamp's clock did exactly this: click it to count down instead of up. */
+        @Override public void onToggleTimeMode() {
+            boolean remaining = !mainWindow.isShowRemaining();
+            mainWindow.setShowRemaining(remaining);
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putBoolean(PREF_REMAINING, remaining).apply();
+            Logs.i(TAG, "clock shows " + (remaining ? "time remaining" : "time elapsed"));
+        }
+
+        @Override public void onToggleTitleMode() {
+            showFileName = !showFileName;
+            mainWindow.setNowPlaying(nowPlayingText(engine.state()),
+                    engine.state().positionMs, engine.state().durationMs,
+                    engine.state().isPlaying(),
+                    engine.state().status == PlaybackState.Status.PAUSED);
+            Logs.i(TAG, "title shows " + (showFileName ? "the file name" : "the tags"));
         }
 
         @Override public void onToggleVisualiser() {

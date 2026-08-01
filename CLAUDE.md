@@ -145,13 +145,17 @@ If you find yourself designing something in this list, stop and ask.
     this unit reports `dspActive=false`, `hasDspSetting=false`, `isHasDSP=false`. Do not
     build an EQ window: it would be sliders wired to nothing, and it would contradict the
     reason the project exists — the path to the DACs stays untouched.
-12. **`getSpectrum` is real and drives the analyser**, but its response shape was never
+12. **MilkDrop, AVS and Geiss cannot be ported here.** They read live PCM at frame rate —
+    butterchurn calls `getByteTimeDomainData` every frame — and this app never touches the
+    audio. Do not promise presets; the light show behind the EQ button is FFT-driven and
+    says so.
+13. **`getSpectrum` is real and drives the analyser**, but its response shape was never
     captured during the survey. The parser takes whatever numeric array it finds and
     self-calibrates against a decaying peak, and it logs the first raw body: read that in
     the on-device console and replace the guess with the fact.
-13. **Poll it five times a second, not thirty.** Safe request spacing is 0.15 s; the window
+14. **Poll it 80 ms full-screen, 180 ms for the LCD analyser**, and let it back off. Safe request spacing is 0.15 s; the window
     eases between frames to look continuous.
-14. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
+15. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
     `bitrate` (text, e.g. `"1411.20 Kbps"`), `bits` and `channels`. That is everything the
     main window's kbps / kHz / mono-stereo displays need. Not every source fills them in,
     so fall back to our own parsed tags rather than showing a guess.

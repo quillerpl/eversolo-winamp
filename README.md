@@ -38,6 +38,17 @@ selected — nothing is reachable only by a gesture. MISC → MISC OPTS scales t
 ×1 / ×1.5 / ×2, because a 13-pixel row is about 3 mm on this screen: fine to read,
 unpleasant to hit.
 
+### Light show
+
+Behind the EQ button, since this device has no equalizer to open: three full-screen effects
+driven by the same FFT, with beat detection on the bass bins.
+
+It is **not** MilkDrop or AVS, and it cannot be. Those read the waveform sixty times a
+second — butterchurn calls `getByteTimeDomainData` every frame and runs its own FFT — and
+this player never touches the audio: the device decodes straight to its DACs, which is the
+point, and hands over a frequency snapshot via HTTP. What is here moves with the music
+without knowing what it looks like.
+
 ### Spectrum analyser
 
 Nineteen bars in the main window's little LCD, coloured from the skin's own `viscolor.txt`,

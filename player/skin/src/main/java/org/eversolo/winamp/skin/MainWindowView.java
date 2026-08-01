@@ -55,6 +55,10 @@ public final class MainWindowView extends View {
         void onShowLog();
         /** Tapping the little black window: spectrum analyser on or off. */
         void onToggleVisualiser();
+        /** Tapping the clock: elapsed or remaining. */
+        void onToggleTimeMode();
+        /** Tapping the song title: the tags or the file name. */
+        void onToggleTitleMode();
     }
 
     // ---- model ----
@@ -76,6 +80,7 @@ public final class MainWindowView extends View {
     private int marqueeOffset = 0;
     private long titleBarDownAt = 0;    // for the long-press that opens the log console
 
+    private boolean showRemaining = false;
     private String flashText = "";
     private long flashUntil = 0;
     private static final long FLASH_MS = 4000;
@@ -277,15 +282,35 @@ public final class MainWindowView extends View {
                 (VIS_X + VIS_W) * scale, (VIS_Y + VIS_H) * scale);
     }
 
+    /**
+     * The clock, either counting up or counting down with a minus sign in front of it -
+     * Winamp toggled between the two when you clicked it, and so does this.
+     *
+     * The minus is a 5x1 sliver at 38,32 in numbers.bmp: Winamp really does draw it as a
+     * single line of pixels.
+     */
     private void drawTime(Canvas c) {
-        long secs = Math.max(0, positionMs / 1000);
+        long ms = positionMs;
+        boolean counting = showRemaining && durationMs > 0;
+        if (counting) ms = Math.max(0, durationMs - positionMs);
+
+        long secs = Math.max(0, ms / 1000);
         int mm = (int) (secs / 60), ss = (int) (secs % 60);
         if (mm > 99) mm = 99;
+        if (counting) sprite(c, "MINUS_SIGN", 38, 32);
         digit(c, mm / 10, 48, 26);
         digit(c, mm % 10, 60, 26);
         digit(c, ss / 10, 78, 26);
         digit(c, ss % 10, 90, 26);
     }
+
+    public void setShowRemaining(boolean b) {
+        if (showRemaining == b) return;
+        showRemaining = b;
+        invalidate();
+    }
+
+    public boolean isShowRemaining() { return showRemaining; }
 
     private void digit(Canvas c, int d, int x, int y) {
         if (d < 0 || d > 9) return;
@@ -469,6 +494,11 @@ public final class MainWindowView extends View {
             new Hit("close", 264, 3, 9, 9),
             // Tapping the visualiser turns it off and on, as it cycled modes in Winamp.
             new Hit("vis", VIS_X, VIS_Y, VIS_W, VIS_H),
+            // The clock: tap to count down instead of up, as Winamp did. 39,26 is the
+            // clickable area webamp uses; a few pixels taller here for fingers.
+            new Hit("time", 36, 24, 62, 17),
+            // The song title: tap to see the file name instead.
+            new Hit("title", 111, 20, 154, 14),
     };
 
     @Override
@@ -545,6 +575,8 @@ public final class MainWindowView extends View {
             case "pl":     callbacks.onTogglePlaylist(); break;
             case "close":  callbacks.onClose(); break;
             case "vis":    callbacks.onToggleVisualiser(); break;
+            case "time":   callbacks.onToggleTimeMode(); break;
+            case "title":  callbacks.onToggleTitleMode(); break;
             case "shuffle": callbacks.onShuffle(); break;
             case "repeat": callbacks.onRepeat(); break;
             case "volume": callbacks.onVolume(volumePercent); break;

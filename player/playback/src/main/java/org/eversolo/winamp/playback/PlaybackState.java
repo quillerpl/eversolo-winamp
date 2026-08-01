@@ -6,11 +6,12 @@ public final class PlaybackState {
     public enum Status { IDLE, PLAYING, PAUSED, UNKNOWN }
 
     public static final PlaybackState EMPTY =
-            new PlaybackState(Status.IDLE, "", "", 0, 0, 0, 200, false, 0, 0, 0, 0);
+            new PlaybackState(Status.IDLE, "", "", "", 0, 0, 0, 200, false, 0, 0, 0, 0);
 
     public final Status status;
     public final String title;
     public final String artist;
+    public final String album;
     public final long positionMs;
     public final long durationMs;
     public final int volume;
@@ -27,13 +28,14 @@ public final class PlaybackState {
     public final int bits;            // 16, 24, 32
     public final int channels;        // 1 = mono, 2 = stereo
 
-    public PlaybackState(Status status, String title, String artist,
+    public PlaybackState(Status status, String title, String artist, String album,
                          long positionMs, long durationMs,
                          int volume, int maxVolume, boolean muted,
                          int sampleRate, int bitrateKbps, int bits, int channels) {
         this.status = status;
         this.title = title == null ? "" : title;
         this.artist = artist == null ? "" : artist;
+        this.album = album == null ? "" : album;
         this.positionMs = positionMs;
         this.durationMs = durationMs;
         this.volume = volume;

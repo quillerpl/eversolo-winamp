@@ -247,11 +247,13 @@ public final class EversoloHttpEngine implements PlaybackEngine {
 
             String title = music == null ? "" : music.optString("title", "");
             String artist = music == null ? "" : music.optString("artist", "");
+            String album = music == null ? "" : music.optString("album", "");
 
             return new PlaybackState(
                     PlaybackState.fromDeviceState(o.optInt("state", -1)),
                     title,
                     artist,
+                    album,
                     o.optLong("position", 0),
                     o.optLong("duration", 0),
                     // note the device's own spelling: currenttVolume, two t's
@@ -286,15 +288,28 @@ public final class EversoloHttpEngine implements PlaybackEngine {
      * audio, and API_FINDINGS puts the safe request spacing at 0.15 s. The window eases
      * between the frames it gets, which is what makes it look continuous.
      */
-    public void startSpectrum(final SpectrumListener listener, final int bars) {
+    public void startSpectrum(final SpectrumListener listener, final int bars,
+                              final int intervalMs) {
         stopSpectrum();
         final Thread t = new Thread(() -> {
+            long reported = 0;
             while (!Thread.currentThread().isInterrupted() && running) {
+                long began = System.currentTimeMillis();
                 float[] values = fetchSpectrum(bars);
+                long took = System.currentTimeMillis() - began;
                 if (values != null) {
                     try { listener.onSpectrum(values); } catch (Exception ignored) {}
                 }
-                try { Thread.sleep(180); } catch (InterruptedException e) { return; }
+                // Back off on our own if the device is labouring: never spend more than
+                // half the time waiting on it. API_FINDINGS' 0.15 s spacing was measured
+                // over Wi-Fi from a laptop; this is a loopback call, but the box is small
+                // and it is also decoding audio, so let it set the pace.
+                long wait = Math.max(intervalMs, took * 2);
+                if (System.currentTimeMillis() - reported > 10000) {
+                    reported = System.currentTimeMillis();
+                    Logs.i(TAG, "getSpectrum took " + took + " ms, polling every " + wait + " ms");
+                }
+                try { Thread.sleep(wait); } catch (InterruptedException e) { return; }
             }
         }, "spectrum-poll");
         t.setDaemon(true);

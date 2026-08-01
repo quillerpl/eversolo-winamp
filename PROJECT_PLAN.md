@@ -4,9 +4,34 @@
 
 ## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.14-vis`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.15-lightshow`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
+
+### No MilkDrop or AVS either, and the reason is the same one
+
+Asked whether Winamp's beat-synced visualisers could be ported. **They cannot**, and the
+blocker is not effort: those plugins read the *waveform*, sixty times a second. butterchurn
+— the MilkDrop reimplementation — calls `getByteTimeDomainData` on every frame and runs its
+own FFT over 1024 stereo samples (`src/audio/audioProcessor.js`). MilkDrop, Geiss and AVS
+all want the same thing, live PCM, from playback or a microphone.
+
+This player never has the audio. The device decodes it straight to its DACs — the entire
+point of the design — and hands us a frequency snapshot over HTTP. Capturing it Android-side
+is out for the same reason: the bit-perfect path does not go through the mixer, and asking a
+hi-fi player for the microphone permission to find out is not a trade worth making.
+
+So `skin/VisualiserView.java` is an honest substitute: three effects on the device's own FFT
+with beat detection on the bass bins. It moves with the music; it does not know what the
+music looks like. It lives behind the EQ button, which had nothing else to do.
+
+**Two things the off-device simulation settled before any install.** The beat baseline must
+move at the *measurement* rate, not the frame rate — updating it every frame lets the
+average converge on the eased value, the ratio never rises, and nothing ever pulses. And the
+poll rate matters more than expected: against 120 BPM material, 180 ms spacing detected
+75 BPM of beats and 80 ms detected 112. The full-screen window polls at 80 ms, the little
+LCD analyser at 180, and the poller backs off on its own if a request ever takes longer than
+half the interval.
 
 ### There will be no equalizer window, and that is the finding
 
@@ -115,6 +140,12 @@ these are pixel art the zoom multiplies the *window scale* rather than stretchin
 it, hollow for some. That is also the answer to "did ADD work?" — the message on the bottom
 bar is the other half, and it is drawn *in the window* because this is an overlay above
 everything and a Toast behind it is no feedback at all.
+
+**The two LCDs answer to a tap** (v0.15), as Winamp's did: the clock switches between
+elapsed and remaining — with the minus sign, which really is a 5×1 sliver of pixels at 38,32
+— and the title strip switches between the tags and the file name. The tags read
+*song - album - artist*, taken from our own parsing where we have it, because the device
+only reports the artist for local files.
 
 **kbps / kHz / mono–stereo now show real figures** (v0.12). They had never been wired to
 anything: `MainWindowView.setQuality` existed and nobody called it, so the two LCD boxes sat
