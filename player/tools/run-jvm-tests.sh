@@ -78,14 +78,16 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenGeometry.java\"" >>
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenSprites.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/SkinSprites.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >> "$SRC"
-for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest; do
+# :dsp is plain Java for exactly this reason - the analyser's maths is provable here.
+find "$HERE/dsp/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' >> "$SRC"
+for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done
 
 "$JAVAC" -encoding UTF-8 -nowarn -d "$BUILD/classes" @"$SRC"
 
 fail=0
-for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest"; do
+for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest"; do
   set -- $t
   echo; echo "=== $1 ==="
   "$JAVA" -Dfile.encoding=UTF-8 -cp "$BUILD/classes" "$@" || fail=1

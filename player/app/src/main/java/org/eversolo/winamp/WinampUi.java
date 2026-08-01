@@ -25,7 +25,6 @@ import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.PlaylistWindowView;
 import org.eversolo.winamp.skin.Skin;
 import org.eversolo.winamp.skin.SkinSprites;
-import org.eversolo.winamp.skin.VisualiserView;
 import org.eversolo.winamp.skin.WindowScales;
 import org.eversolo.winamp.skin.ZoomChooser;
 import org.eversolo.winamp.tags.M3uParser;
@@ -70,9 +69,6 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Visualiser animation frame. The device is polled slower; this smooths between. */
     private static final long VIS_FRAME_MS = 40;
-    /** How often getSpectrum is asked, full-screen and for the little LCD analyser. */
-    private static final int SPECTRUM_FAST_MS = 80;
-    private static final int SPECTRUM_IDLE_MS = 180;
 
     private final Context ctx;
     private final Runnable onQuit;
@@ -83,29 +79,27 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private final PlaylistController controller = new PlaylistController(playlist, engine);
 
     private final MusicLibrary library = new MusicLibrary();
+    private FileSpectrum spectrum;
     private PlaylistStore store;
 
     private MainWindowView mainWindow;
     private PlaylistWindowView playlistWindow;
     private BrowserWindowView browserWindow;
-    private VisualiserView visWindow;
     private LibraryBrowser browser;
     private FrameLayout root;
 
     private boolean playlistOpen = false;
     private boolean browserOpen = false;
-    private boolean visWindowOpen = false;
     private boolean marqueeRunning = false;
     private boolean shuffleOn = false;
     private boolean repeatOn = false;
     private int mainScale = 4, playlistScale = 4;
     private int laidOutW, laidOutH;
     private int zoom = 0;                   // index into ZoomChooser.LEVELS
-    // Off unless asked for: this device serves no spectrum, so the analyser has nothing to
-    // draw, and an empty LCD is what Winamp looks like at rest anyway.
-    private boolean visualiserOn = false;
+    private boolean visualiserOn = true;
     private boolean showFileName = false;
     private boolean spectrumRunning = false;
+    private volatile String spectrumProblem;
     private boolean visAnimating = false;
     private boolean restoredPlaylist = false;
     private final Runnable savePlaylist = new Runnable() {
@@ -120,7 +114,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         this.zoom = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getInt(PREF_ZOOM, 0);
         this.visualiserOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(PREF_VIS, false);
+                .getBoolean(PREF_VIS, true);
         // First line in the log, so "which build is actually running?" is never a guess
         // again - the last install silently did not replace the app.
         Logs.i(TAG, "EversoloWinamp " + version + " starting");
@@ -171,13 +165,17 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setVisibility(View.GONE);
         root.addView(browserWindow, centred());
 
-        visWindow = new VisualiserView(ctx);
-        visWindow.setSkin(skin);
-        visWindow.setButtonScale(playlistScale);
-        visWindow.setCallbacks(new VisualiserActions());
-        visWindow.setVisibility(View.GONE);
-        root.addView(visWindow, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // The analyser decodes the playing file itself: the device serves no spectrum
+        // (isHasSpectrum is false on every source) but the samples are in the file, and we
+        // know which file because we asked for it to be played.
+        spectrum = new FileSpectrum(new FileSpectrum.Listener() {
+            @Override public void onBands(float[] bands) {
+                ui.post(() -> mainWindow.setSpectrum(bands));
+            }
+            @Override public void onProblem(String problem) {
+                spectrumProblem = problem;
+            }
+        });
 
         browser = new LibraryBrowser(library, new BrowserHost());
 
@@ -239,7 +237,6 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         playlistWindow.setGeometry(playlistGeometry());
         browserWindow.setScale(playlistScale);
         browserWindow.setGeometry(browserGeometry());
-        visWindow.setButtonScale(playlistScale);
     }
 
     /**
@@ -271,7 +268,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         if (store != null) store.save(playlist);
         marqueeRunning = false;
         spectrumRunning = false;
-        engine.stopSpectrum();
+        if (spectrum != null) spectrum.stop();
         playlist.removeListener(this);
         engine.removeListener(this);
         engine.stop();
@@ -280,10 +277,6 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Back closes one layer at a time; from the bare main window the host quits. */
     public boolean handleBack() {
-        if (visWindowOpen) {
-            closeVisualiserWindow();
-            return true;
-        }
         if (browserOpen) {
             if (browser.up()) return true;      // up a folder before leaving the browser
             closeBrowser();
@@ -354,7 +347,6 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setVisibility(main ? View.VISIBLE : View.GONE);
         playlistWindow.setVisibility(playlistWin ? View.VISIBLE : View.GONE);
         browserWindow.setVisibility(browserWin ? View.VISIBLE : View.GONE);
-        visWindow.setVisibility(visWindowOpen ? View.VISIBLE : View.GONE);
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
         updateVisualiser();
@@ -502,30 +494,36 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * the main window on top, playback going, and the user not having switched it off. It
      * costs five HTTP requests a second, so it should not run in the background.
      */
+    /**
+     * Keep the analyser fed while it can be seen.
+     *
+     * The source is the file, not the device: decode the same track a second time, in this
+     * app, and do our own FFT. It only works for tracks this app started, because that is
+     * when we know the path - getState does not report one.
+     */
     private void updateVisualiser() {
-        boolean lcd = visualiserOn && !playlistOpen && !browserOpen && !visWindowOpen
+        boolean wanted = visualiserOn && !playlistOpen && !browserOpen
                 && engine.state().isPlaying();
-        // The full-screen window polls whenever it is up, even paused: without that it
-        // sits there black and there is no way to tell a dead feed from a quiet track.
-        boolean wantPoll = lcd || visWindowOpen;
-        if (wantPoll != spectrumRunning) {
-            spectrumRunning = wantPoll;
-            if (wantPoll) {
-                // The full-screen show wants every beat it can get; the little LCD
-                // analyser does not, so it is polled gently.
-                engine.startSpectrum(bars -> ui.post(() -> {
-                    mainWindow.setSpectrum(bars);
-                    visWindow.setSpectrum(bars);
-                }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
-            } else {
-                engine.stopSpectrum();
-                // Let the analyser's bars fall away rather than freezing on the last
-                // frame. Deliberately NOT sent to the full-screen window: it treats any
-                // measurement as proof the feed works, and a row of zeros is not that.
+        Track playing = playlist.current();
+
+        if (!wanted || playing == null) {
+            if (spectrumRunning) {
+                spectrumRunning = false;
+                spectrum.stop();
                 mainWindow.setSpectrum(new float[19]);
             }
+            if (wanted && playing == null) {
+                spectrumProblem = "only tracks started from here can be analysed";
+            }
+            return;
         }
-        if (wantPoll) startVisAnimation();
+        if (!spectrumRunning) {
+            spectrumRunning = true;
+            spectrumProblem = null;
+        }
+        spectrum.play(playing.absolutePath, engine.state().positionMs);
+        spectrum.syncTo(engine.state().positionMs);
+        startVisAnimation();
     }
 
     /** Eases the bars between the frames the device gives us, and lets the peaks fall. */
@@ -534,45 +532,11 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         visAnimating = true;
         ui.postDelayed(new Runnable() {
             @Override public void run() {
-                if (!spectrumRunning && !visWindowOpen) { visAnimating = false; return; }
-                if (visWindowOpen) {
-                    // Say why the screen is empty rather than leaving it empty.
-                    visWindow.setProblem(engine.spectrumProblem());
-                    visWindow.tick();
-                } else {
-                    mainWindow.tickVisualiser();
-                }
+                if (!spectrumRunning) { visAnimating = false; return; }
+                mainWindow.tickVisualiser();
                 ui.postDelayed(this, VIS_FRAME_MS);
             }
         }, VIS_FRAME_MS);
-    }
-
-    private void openVisualiserWindow() {
-        visWindowOpen = true;
-        spectrumRunning = false;        // reopen the poll at the faster rate
-        engine.stopSpectrum();
-        show(false, false, false);
-        mainWindow.setToggles(playlistOpen, true, shuffleOn, repeatOn);
-        updateVisualiser();
-        startVisAnimation();
-        Logs.i(TAG, "visualiser window opened");
-    }
-
-    private void closeVisualiserWindow() {
-        visWindowOpen = false;
-        spectrumRunning = false;
-        engine.stopSpectrum();
-        show(!playlistOpen && !browserOpen, playlistOpen, browserOpen);
-        mainWindow.setToggles(playlistOpen, false, shuffleOn, repeatOn);
-        updateVisualiser();
-        Logs.i(TAG, "visualiser window closed");
-    }
-
-    private final class VisualiserActions implements VisualiserView.Callbacks {
-        @Override public void onNextEffect() {
-            Logs.i(TAG, "visualiser effect -> " + VisualiserView.EFFECTS[visWindow.effect()]);
-        }
-        @Override public void onClose() { closeVisualiserWindow(); }
     }
 
     private void setVisualiser(boolean on) {
@@ -665,13 +629,13 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
          * So the button says so rather than opening a decoration.
          */
         /**
-         * There is no equalizer on this device - no tone control of any kind in the API,
-         * and it reports hasDspSetting=false - and a working one would undo the whole
-         * point of the player. So the EQ button opens the light show instead, which is
-         * the other thing that button's neighbourhood was for.
+         * No equalizer, and nothing behind this button. The API has no tone control of any
+         * kind, the unit reports hasDspSetting=false, and a working EQ would undo the point
+         * of the player. The light show that briefly lived here was removed: with no audio
+         * data it could only move on a timer, which is a screensaver, not a visualiser.
          */
         @Override public void onToggleEqualizer() {
-            if (visWindowOpen) closeVisualiserWindow(); else openVisualiserWindow();
+            mainWindow.flashTitle("NO EQUALISER - THIS PLAYER STAYS BIT PERFECT");
         }
 
         /** Winamp's clock did exactly this: click it to count down instead of up. */
@@ -697,7 +661,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             setVisualiser(on);
             // If the feed is broken, say so here: the analyser window is 16 px tall and
             // has nowhere to put a message of its own.
-            String problem = engine.spectrumProblem();
+            String problem = spectrumProblem;
             mainWindow.flashTitle(!on ? "ANALYSER OFF"
                     : problem == null ? "ANALYSER ON"
                     : "ANALYSER ON - " + problem.toUpperCase(java.util.Locale.UK));

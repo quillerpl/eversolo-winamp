@@ -154,7 +154,9 @@ If you find yourself designing something in this list, stop and ask.
     `getState.everSoloPlayInfo.isHasSpectrum` is **false** in every capture ever taken, for
     local files and internet radio alike. There is no audio data available to this app at
     all — no waveform, no bands, no level. Anything "beat-synced" is off the table unless
-    that flag ever turns true.
+    that flag ever turns true. **The analyser gets its data by decoding the playing file
+    itself** (`FileSpectrum`) - which is what the stock player does, since it is the thing
+    decoding the audio. Only works for tracks this app started: that is when we know a path.
 14. **You can query the device yourself.** It is on the LAN with no authentication, so
     `curl http://192.168.1.207:9529/ZidooMusicControl/v2/getSpectrum` beats asking the user
     to read a log off the screen. Reads are safe; anything that changes state needs asking
@@ -207,7 +209,7 @@ file access, and a sideloaded app has no Play Store targeting requirement.
 
 Modules: `:app` (UI hosts) · `:core` (logging) · `:tags` (pure-Java parsers) ·
 `:library` (scan + index) · `:playback` (device transport) · `:playlist` (sequencing) ·
-`:skin` (Winamp rendering).
+`:skin` (Winamp rendering) · `:dsp` (FFT and band mapping, plain Java so it can be tested).
 
 **Build:** `cd player && ./gradlew assembleDebug` with JDK 21 (Android Studio's JBR),
 Gradle 8.13, AGP 8.12.1, `targetSdk 29`. `player/local.properties` holds the SDK path;

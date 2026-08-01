@@ -4,7 +4,7 @@
 
 ## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.18-nospectrum`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.19-analyser`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
 
@@ -31,18 +31,37 @@ nothing is being resampled and the path is not going through the mixer where
 `android.media.audiofx.Visualizer` could tap it — which is the bit-perfect design working
 exactly as intended.
 
-What v0.18 does about it:
+### So the analyser decodes the file itself (v0.19)
 
-* The analyser is **off by default**. An empty LCD is what Winamp looks like at rest.
-* The light show still runs, on **time alone**, and says so along the bottom of the screen
-  rather than pretending to react.
-* A real bug is fixed: the full-screen window took any measurement as proof the feed worked,
-  and "let the bars fall away" - a row of zeros sent when playback stops - counted. It
-  silenced its own message permanently, which is why it showed a black screen with no
-  explanation.
+The user's objection was the right one: *the stock player has a working analyser, so the
+data exists somewhere.* It does — inside the stock player, which is the thing decoding the
+audio. It simply does not publish it.
 
-**The one thing that would change this** is `isHasSpectrum` turning true on some future
-firmware. Check it before writing another line of parser.
+We can do exactly what it does. We know the path of the track, because we asked for it to be
+played, so `FileSpectrum` decodes the same file a second time with MediaCodec and runs its
+own FFT. Nothing is played and nothing touches the output, so the bit-perfect path is
+untouched; it costs one FLAC decode, a few percent of one core.
+
+* `:dsp` is a new **plain-Java module** — no Android — holding the FFT and the band mapping,
+  so the arithmetic is provable on a laptop. `FftTest` feeds it sine waves of known pitch
+  and checks they land in the right bin and light the right bar: **22 assertions**.
+* Two things that separate a Winamp-looking display from a wrong one, both settled by those
+  tests. Bands are spaced **logarithmically** — linear spacing puts fifteen of nineteen bars
+  above 5 kHz where nothing happens. And a band takes the **loudest** bin in its range, not
+  the average: averaging buried a 1 kHz sine, because the upper bands are dozens of bins
+  wide and one strong partial among fifty quiet ones reads as silence. The test caught that.
+* Staying in step is the fiddly part: decoding runs many times faster than playback, so
+  frames are paced against the wall clock and the decoder re-seeks whenever the device's
+  reported position and ours drift more than 400 ms apart.
+* It only works for tracks **started from this app** — that is when we know the path.
+  `getState` does not report one.
+
+The dead `getSpectrum` polling is deleted from the engine. **The one thing that would bring
+it back** is `isHasSpectrum` turning true on a future firmware.
+
+**The full-screen visualiser is removed** at the user's request. With no live audio it could
+only move on a timer, which is a screensaver, not a visualiser. The EQ button says what it
+always said: there is no equaliser here, and that is the point.
 
 ### No MilkDrop or AVS either, and the reason is the same one
 

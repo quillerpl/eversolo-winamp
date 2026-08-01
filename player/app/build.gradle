@@ -13,8 +13,8 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 18
-        versionName "0.18-nospectrum"
+        versionCode 19
+        versionName "0.19-analyser"
     }
     buildTypes {
         debug { minifyEnabled false }
@@ -30,4 +30,5 @@ dependencies {
     implementation project(':playback')
     implementation project(':playlist')
     implementation project(':skin')
+    implementation project(':dsp')
 }

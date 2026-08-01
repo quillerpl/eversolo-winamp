@@ -1,0 +1,7 @@
+// A plain Java module on purpose: no Android, so the maths can be proved on a desktop JVM
+// before it ever reaches a device that has no debugger.
+plugins { id 'java-library' }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
