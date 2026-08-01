@@ -149,15 +149,19 @@ If you find yourself designing something in this list, stop and ask.
     butterchurn calls `getByteTimeDomainData` every frame — and this app never touches the
     audio. Do not promise presets; the light show behind the EQ button is FFT-driven and
     says so.
-13. **`getSpectrum` nests its data inside strings, and is empty when nothing is playing.**
-    Paused it answers `{"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}` —
-    `fft_value` is a *string* containing JSON, and that JSON is an object, not an array.
-    **You can query the device yourself:** it is on the LAN with no authentication, so
+13. **This device has no spectrum. `getSpectrum` always returns `{}`.** Proven on the unit:
+    while playing, eight samples in a row, with every parameter and display mode tried.
+    `getState.everSoloPlayInfo.isHasSpectrum` is **false** in every capture ever taken, for
+    local files and internet radio alike. There is no audio data available to this app at
+    all — no waveform, no bands, no level. Anything "beat-synced" is off the table unless
+    that flag ever turns true.
+14. **You can query the device yourself.** It is on the LAN with no authentication, so
     `curl http://192.168.1.207:9529/ZidooMusicControl/v2/getSpectrum` beats asking the user
-    to read a log. It is a read, so it is safe; anything that changes state is not.
-14. **Poll it 80 ms full-screen, 180 ms for the LCD analyser**, and let it back off. Safe request spacing is 0.15 s; the window
+    to read a log off the screen. Reads are safe; anything that changes state needs asking
+    first - though the user granted control explicitly on 2 Aug.
+15. **Poll it 80 ms full-screen, 180 ms for the LCD analyser**, and let it back off. Safe request spacing is 0.15 s; the window
     eases between frames to look continuous.
-15. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
+16. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
     `bitrate` (text, e.g. `"1411.20 Kbps"`), `bits` and `channels`. That is everything the
     main window's kbps / kHz / mono-stereo displays need. Not every source fills them in,
     so fall back to our own parsed tags rather than showing a guess.

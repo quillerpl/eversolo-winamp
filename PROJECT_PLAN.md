@@ -4,42 +4,45 @@
 
 ## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.17-fft`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.18-nospectrum`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
 
-### The spectrum feed is the open question
+### The spectrum feed is dead, and the device says so itself
 
-**Found it, by asking the device instead of the user.** The LAN API has no authentication,
-so `curl http://<device>:9529/ZidooMusicControl/v2/getSpectrum` answered the question in one
-call — and the answer was two nested surprises:
+**There is no spectrum on this device.** Sampled directly over the LAN with music playing:
 
-```json
-{"fft_value":"{}","freqs_value":"{}","fft_level":0,"nb_freqs":0}
+```
+GET /ZidooMusicControl/v2/getSpectrum  ->  {}
 ```
 
-`fft_value` is a **string holding JSON**, and inside it is an **object**, not an array. Both
-parsers written so far — the one looking for keys by name, and the one walking for arrays —
-were incapable of reading that. v0.17 walks strings-that-are-really-documents and objects
-keyed by index as well, and falls back to driving every bar from `fft_level` when there are
-no bands at all, which is a VU meter wearing the analyser's clothes but beats a dead window.
+Eight times in a row, with `type`, `openType`, `index` and `nb_freqs` tried as parameters,
+and in every mode `changVUDisplay` offers — `spDisplayMode` 0, 1 and 2, `vuDisplayMode` 0
+and 1. Always `{}`. Paused, it returns a structure full of zeros in which `fft_value` is a
+*string* containing `"{}"`, which is what defeated two parsers before this.
 
-It was also **paused** when sampled, which is why everything is zero. **The populated shape
-is still uncaptured** — sample it again with music actually playing before trusting any of
-this.
+The device states it plainly: **`getState.everSoloPlayInfo.isHasSpectrum` is false** — here,
+in `state_before.json`, and in `probe_results.json`, covering local files and internet radio.
+`isHasDSP` is false too.
 
-v0.16 changes the approach and, more importantly, makes the failure legible:
+**So this app has no audio data of any kind.** Not a waveform, not bands, not a level. The
+Android side is no help either: the source was 48 kHz/24-bit and the output 48000 Hz, so
+nothing is being resampled and the path is not going through the mixer where
+`android.media.audiofx.Visualizer` could tap it — which is the bit-perfect design working
+exactly as intended.
 
-* The parser now **walks the whole response** for the first numeric array of eight or more
-  values, at any depth and under any key. Names it does not know cannot defeat it.
-* It logs the first raw body, and separately logs "no numeric array" and "all zeros",
-  because those are different faults. All zeros most likely means the device only computes
-  its FFT while its own visualiser screen is up — worth testing next with `changVUDisplay`,
-  which is a state-changing call and so needs asking first.
-* The light show **says what is wrong across the middle of the screen** instead of sitting
-  black, and the analyser reports the same thing in the title strip when you switch it on.
-* The animation now runs whenever the window is open, playing or not. Before, nothing ticked
-  unless playback was running, so a dead feed and a paused track looked identical.
+What v0.18 does about it:
+
+* The analyser is **off by default**. An empty LCD is what Winamp looks like at rest.
+* The light show still runs, on **time alone**, and says so along the bottom of the screen
+  rather than pretending to react.
+* A real bug is fixed: the full-screen window took any measurement as proof the feed worked,
+  and "let the bars fall away" - a row of zeros sent when playback stops - counted. It
+  silenced its own message permanently, which is why it showed a black screen with no
+  explanation.
+
+**The one thing that would change this** is `isHasSpectrum` turning true on some future
+firmware. Check it before writing another line of parser.
 
 ### No MilkDrop or AVS either, and the reason is the same one
 

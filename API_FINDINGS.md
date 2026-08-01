@@ -498,9 +498,19 @@ so this is recorded as unresolved rather than as "DLNA produces no sound".
   ours — finds nothing and reports the endpoint broken. It is not: it is empty because the
   device was paused. `fft_level` is a plain number, an overall level rather than bands.
 
-  The populated shape, while playing, is **still uncaptured**. Ask the device directly
-  (`curl http://<device>:9529/ZidooMusicControl/v2/getSpectrum`) with music running, and
-  write down what comes back before writing any more code against it.
+  **And while playing it returns `{}` — nothing at all.** Sampled on the real unit with a
+  48 kHz/24-bit FLAC running, eight times in a row, with and without parameters
+  (`type`, `openType`, `index`, `nb_freqs`), and in every display mode `changVUDisplay`
+  offers (`spDisplayMode` 0, 1 and 2, `vuDisplayMode` 0 and 1). Always `{}`.
+
+  **The device says why itself:** `getState.everSoloPlayInfo.isHasSpectrum` is **false** —
+  in this capture, in `state_before.json` from the first survey, and in `probe_results.json`,
+  which between them cover local files and internet radio. Alongside it, `isHasDSP: false`.
+  This unit has no spectrum to give. The endpoint exists and answers 200; there is simply
+  nothing behind it.
+
+  Check `isHasSpectrum` before building anything on this. Do not spend another evening on
+  the parser.
 * **Album art:** `getImage?id=<songId>&target=16` returns a PNG. The `target` parameter
   appeared to make no difference (0, 1 and 16 all returned the identical 563 KB image),
   so it may not be a size selector.

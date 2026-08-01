@@ -6,7 +6,7 @@ public final class PlaybackState {
     public enum Status { IDLE, PLAYING, PAUSED, UNKNOWN }
 
     public static final PlaybackState EMPTY =
-            new PlaybackState(Status.IDLE, "", "", "", 0, 0, 0, 200, false, 0, 0, 0, 0);
+            new PlaybackState(Status.IDLE, "", "", "", 0, 0, 0, 200, false, 0, 0, 0, 0, false);
 
     public final Status status;
     public final String title;
@@ -28,10 +28,18 @@ public final class PlaybackState {
     public final int bits;            // 16, 24, 32
     public final int channels;        // 1 = mono, 2 = stereo
 
+    /**
+     * The device's own answer to "can I have a spectrum?", from
+     * everSoloPlayInfo.isHasSpectrum. On this unit it is false for everything - local
+     * files and internet radio alike - which is why getSpectrum answers with {}.
+     */
+    public final boolean hasSpectrum;
+
     public PlaybackState(Status status, String title, String artist, String album,
                          long positionMs, long durationMs,
                          int volume, int maxVolume, boolean muted,
-                         int sampleRate, int bitrateKbps, int bits, int channels) {
+                         int sampleRate, int bitrateKbps, int bits, int channels,
+                         boolean hasSpectrum) {
         this.status = status;
         this.title = title == null ? "" : title;
         this.artist = artist == null ? "" : artist;
@@ -45,6 +53,7 @@ public final class PlaybackState {
         this.bitrateKbps = bitrateKbps;
         this.bits = bits;
         this.channels = channels;
+        this.hasSpectrum = hasSpectrum;
     }
 
     public boolean isPlaying() { return status == Status.PLAYING; }

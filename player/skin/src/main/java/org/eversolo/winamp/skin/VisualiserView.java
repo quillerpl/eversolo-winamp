@@ -49,9 +49,10 @@ public final class VisualiserView extends View {
 
     private float[] bars = new float[19];
     private final float[] shown = new float[19];
-    /** Null once real data has arrived; until then, why there is nothing to see. */
+    /** Why there is nothing to see, or null when the feed is fine. */
     private String problem = "waiting for the device";
-    private boolean everHadData = false;
+    /** When the last real measurement arrived: after a while, run on time alone. */
+    private long lastDataAt;
 
     private long chromeUntil, lastTapAt;
     private float energy, averageEnergy;
@@ -92,9 +93,14 @@ public final class VisualiserView extends View {
     public void setCallbacks(Callbacks c) { this.callbacks = c; }
     public void setButtonScale(int s) { this.buttonScale = Math.max(1, s); invalidate(); }
 
-    /** Shown across the middle when no spectrum has arrived, so it is never just dead. */
+    /**
+     * Shown across the middle when no spectrum is arriving, so the window is never just
+     * dead. Set every frame by the host, and simply assigned - an earlier version only
+     * accepted it until the first data arrived, and since "let the bars fall away" counted
+     * as data, it silenced itself permanently and showed a black screen instead.
+     */
     public void setProblem(String why) {
-        if (!everHadData) { problem = why; invalidate(); }
+        problem = why;
     }
 
     public int effect() { return effect; }
@@ -116,7 +122,7 @@ public final class VisualiserView extends View {
     public void setSpectrum(float[] values) {
         if (values == null || values.length == 0) return;
         bars = values;
-        everHadData = true;
+        lastDataAt = System.currentTimeMillis();
         problem = null;
 
         float bass = 0f;
@@ -134,11 +140,29 @@ public final class VisualiserView extends View {
         }
     }
 
-    /** One frame: ease the bars, let the beat decay, and draw. */
+    /**
+     * One frame: ease the bars, let the beat decay, and draw.
+     *
+     * With no measurements for a couple of seconds it falls back to moving on time alone.
+     * That is not a visualiser and does not pretend to be - the message on screen says so -
+     * but a still picture reads as broken, and this device turns out to have no spectrum
+     * to give (everSoloPlayInfo.isHasSpectrum is false on every source).
+     */
     public void tick() {
-        for (int i = 0; i < shown.length; i++) {
-            float target = i < bars.length ? bars[i] : 0f;
-            shown[i] = shown[i] < target ? target : Math.max(target, shown[i] - 0.08f);
+        boolean live = System.currentTimeMillis() - lastDataAt < 2000;
+        if (!live) {
+            double t = frames / 25.0;
+            for (int i = 0; i < shown.length; i++) {
+                shown[i] = (float) (0.25 + 0.22 * Math.sin(t * 1.7 + i * 0.45)
+                        + 0.15 * Math.sin(t * 0.6 - i * 0.2));
+            }
+            energy = 0.3f;
+            if (frames % 30 == 0) { beat = 1f; onBeat(); }
+        } else {
+            for (int i = 0; i < shown.length; i++) {
+                float target = i < bars.length ? bars[i] : 0f;
+                shown[i] = shown[i] < target ? target : Math.max(target, shown[i] - 0.08f);
+            }
         }
         beat = Math.max(0f, beat - 0.06f);
         phase += 0.012f + energy * 0.05f;
@@ -291,14 +315,14 @@ public final class VisualiserView extends View {
                 pad + bh * 0.7f, text);
     }
 
-    /** When there is nothing to draw, say why rather than showing a black screen. */
+    /** When there is no audio data, say so along the bottom rather than pretending. */
     private void drawProblem(Canvas c, int w, int h) {
         if (problem == null) return;
-        text.setColor(0xFF9AA0A6);
-        text.setTextSize(10f * buttonScale);
+        text.setColor(0xFF707880);
+        text.setTextSize(8f * buttonScale);
         text.setTextAlign(Paint.Align.CENTER);
-        c.drawText("NO SPECTRUM: " + problem.toUpperCase(java.util.Locale.UK),
-                w / 2f, h / 2f, text);
+        c.drawText(problem.toUpperCase(java.util.Locale.UK) + " - RUNNING ON TIME ALONE",
+                w / 2f, h - 6f * buttonScale, text);
         text.setTextAlign(Paint.Align.LEFT);
     }
 

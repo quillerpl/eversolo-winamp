@@ -101,7 +101,9 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private int mainScale = 4, playlistScale = 4;
     private int laidOutW, laidOutH;
     private int zoom = 0;                   // index into ZoomChooser.LEVELS
-    private boolean visualiserOn = true;
+    // Off unless asked for: this device serves no spectrum, so the analyser has nothing to
+    // draw, and an empty LCD is what Winamp looks like at rest anyway.
+    private boolean visualiserOn = false;
     private boolean showFileName = false;
     private boolean spectrumRunning = false;
     private boolean visAnimating = false;
@@ -118,7 +120,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         this.zoom = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getInt(PREF_ZOOM, 0);
         this.visualiserOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(PREF_VIS, true);
+                .getBoolean(PREF_VIS, false);
         // First line in the log, so "which build is actually running?" is never a guess
         // again - the last install silently did not replace the app.
         Logs.i(TAG, "EversoloWinamp " + version + " starting");
@@ -517,9 +519,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 }), 19, visWindowOpen ? SPECTRUM_FAST_MS : SPECTRUM_IDLE_MS);
             } else {
                 engine.stopSpectrum();
-                // Let the bars fall away rather than freezing on the last frame.
+                // Let the analyser's bars fall away rather than freezing on the last
+                // frame. Deliberately NOT sent to the full-screen window: it treats any
+                // measurement as proof the feed works, and a row of zeros is not that.
                 mainWindow.setSpectrum(new float[19]);
-                visWindow.setSpectrum(new float[19]);
             }
         }
         if (wantPoll) startVisAnimation();

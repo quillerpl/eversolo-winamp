@@ -244,6 +244,7 @@ public final class EversoloHttpEngine implements PlaybackEngine {
             JSONObject o = new JSONObject(body);
             JSONObject music = o.optJSONObject("playingMusic");
             JSONObject vol = o.optJSONObject("volumeData");
+            JSONObject info = o.optJSONObject("everSoloPlayInfo");
 
             String title = music == null ? "" : music.optString("title", "");
             String artist = music == null ? "" : music.optString("artist", "");
@@ -263,7 +264,8 @@ public final class EversoloHttpEngine implements PlaybackEngine {
                     music == null ? 0 : music.optInt("sampleRateNumber", 0),
                     music == null ? 0 : kbps(music.optString("bitrate", "")),
                     music == null ? 0 : music.optInt("bits", 0),
-                    music == null ? 0 : music.optInt("channels", 0));
+                    music == null ? 0 : music.optInt("channels", 0),
+                    info != null && info.optBoolean("isHasSpectrum", false));
         } catch (Exception e) {
             Logs.w(TAG, "could not parse getState: " + e);
             return null;
@@ -386,7 +388,9 @@ public final class EversoloHttpEngine implements PlaybackEngine {
                     }
                     return flat;
                 }
-                spectrumProblem = "getSpectrum has no numeric array";
+                spectrumProblem = current.hasSpectrum
+                        ? "getSpectrum sent no usable numbers"
+                        : "this device reports no spectrum";
                 if (!loggedNoArray) {
                     loggedNoArray = true;
                     Logs.w(TAG, "no numeric array in getSpectrum: "
