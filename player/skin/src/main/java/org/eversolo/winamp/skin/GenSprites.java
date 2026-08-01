@@ -68,16 +68,16 @@ public final class GenSprites {
 
     static {
         s("GEN_TOP_LEFT", "gen.bmp", 0, 0, 25, 20);
-        s("GEN_TOP_FILL", "gen.bmp", 26, 0, 25, 20);
-        s("GEN_TITLE_LEFT", "gen.bmp", 52, 0, 25, 20);
-        s("GEN_TITLE_FILL", "gen.bmp", 78, 0, 25, 20);
-        s("GEN_TITLE_RIGHT", "gen.bmp", 104, 0, 25, 20);
+        s("GEN_TITLE_LEFT", "gen.bmp", 26, 0, 25, 20);
+        s("GEN_TITLE_FILL", "gen.bmp", 52, 0, 25, 20);
+        s("GEN_TITLE_RIGHT", "gen.bmp", 78, 0, 25, 20);
+        s("GEN_TOP_FILL", "gen.bmp", 104, 0, 25, 20);
         s("GEN_TOP_RIGHT", "gen.bmp", 130, 0, 25, 20);
         s("GEN_TOP_LEFT_INACTIVE", "gen.bmp", 0, 21, 25, 20);
-        s("GEN_TOP_FILL_INACTIVE", "gen.bmp", 26, 21, 25, 20);
-        s("GEN_TITLE_LEFT_INACTIVE", "gen.bmp", 52, 21, 25, 20);
-        s("GEN_TITLE_FILL_INACTIVE", "gen.bmp", 78, 21, 25, 20);
-        s("GEN_TITLE_RIGHT_INACTIVE", "gen.bmp", 104, 21, 25, 20);
+        s("GEN_TITLE_LEFT_INACTIVE", "gen.bmp", 26, 21, 25, 20);
+        s("GEN_TITLE_FILL_INACTIVE", "gen.bmp", 52, 21, 25, 20);
+        s("GEN_TITLE_RIGHT_INACTIVE", "gen.bmp", 78, 21, 25, 20);
+        s("GEN_TOP_FILL_INACTIVE", "gen.bmp", 104, 21, 25, 20);
         s("GEN_TOP_RIGHT_INACTIVE", "gen.bmp", 130, 21, 25, 20);
         s("GEN_CLOSE_PRESSED", "gen.bmp", 148, 42, 9, 9);
         s("GEN_LEFT_BORDER", "gen.bmp", 127, 42, 11, 29);

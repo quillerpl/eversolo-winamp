@@ -11,9 +11,11 @@ DACs bit-perfect. That is the whole point of the design: the stock engine still 
 audio, and this only replaces its face.
 
 > **Status:** running on the author's own DMP-A6. The main window and the playlist editor
-> are confirmed working on the device; the library browser is new and has not been run on
-> hardware yet. The equalizer window and the spectrum analyser are not built. See
-> [PROJECT_PLAN.md](PROJECT_PLAN.md) for exactly where things stand.
+> are confirmed working on the device; the library browser and the spectrum analyser are
+> newer and have not been run on hardware yet. There will be no equalizer — the device's API
+> has no tone control of any kind, and a window full of sliders wired to nothing would
+> contradict the reason this exists. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for exactly
+> where things stand.
 
 ---
 
@@ -32,7 +34,17 @@ come from the skin's own `pledit.txt`. All five fly-out menus work (ADD, REM, SE
 LIST OPTS), and the running-time readout uses the skin's 5×6 bitmap font.
 
 A single tap selects, a double tap plays, and the window's own ▶ button plays whatever is
-selected — nothing is reachable only by a gesture.
+selected — nothing is reachable only by a gesture. MISC → MISC OPTS scales the window
+×1 / ×1.5 / ×2, because a 13-pixel row is about 3 mm on this screen: fine to read,
+unpleasant to hit.
+
+### Spectrum analyser
+
+Nineteen bars in the main window's little LCD, coloured from the skin's own `viscolor.txt`,
+with the peak markers falling as they used to. The data is the device's own FFT, from
+`getSpectrum` — polled five times a second, because this is a small box that is also
+decoding audio, with the drawn bars eased between frames at 25 fps so it reads as
+continuous. Tap it to turn it off.
 
 ### Library browser
 
@@ -46,6 +58,11 @@ makes sense.
 It is a browser and nothing else: no transport, and tapping a track does not play it.
 Tapping a folder or album opens it, tapping a track selects it, and **ADD** puts the
 selection into the playlist — or everything currently listed, if nothing is selected.
+
+A square down the left of a row means it is already in the playlist: filled for all of it,
+hollow for some. That, and the line along the bottom, are drawn inside the window rather
+than shown as a Toast — the player is an overlay above everything, so a Toast behind it
+would be no feedback at all.
 
 ---
 

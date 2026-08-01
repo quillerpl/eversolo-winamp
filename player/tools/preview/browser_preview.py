@@ -32,6 +32,8 @@ TITLE_H, LEFT_W, RIGHT_W, BOTTOM_H, PIECE_W = 20, 11, 8, 14, 25
 BUTTON_W, BUTTON_H = 47, 15
 LETTER_H, LETTER_Y, SPACE_W = 7, 88, 5
 ROW_H, PAD, SCROLL_W, SCROLL_HANDLE_H, BUTTON_GAP = 13, 3, 13, 30, 6
+MARK_GUTTER = 8
+ADDED = {0: 2, 1: 1, 4: 2}      # row -> all / some / none, for the preview
 TABS = ["ARTIST", "ALBUM", "FOLDER", "M3U"]
 
 SAMPLE = [
@@ -145,21 +147,25 @@ def render(skin, sprites, letters, W, H, title="ARTISTS", where="", tab=0, selec
 
     d.rectangle([LEFT_W, TITLE_H, W - RIGHT_W - 1, content_bottom - 1], fill=style["normalbg"])
 
-    # frame
+    # frame. Only the plate and the gold bar tile seamlessly, so only those are repeated;
+    # the plate is built to fit the title rather than being a fixed width.
+    plate_w = max(PIECE_W, gen_text_width(letters, title) + 10)
+    plate_x = max(PIECE_W, (W - plate_w) // 2)
+    right_cap = min(W - 2 * PIECE_W, plate_x + plate_w)
     win.tile_across("GEN_TOP_FILL", PIECE_W, 0, W - 2 * PIECE_W)
+    win.blit("GEN_TITLE_LEFT", plate_x - PIECE_W, 0)
+    win.tile_across("GEN_TITLE_FILL", plate_x, 0, right_cap - plate_x)
+    win.blit("GEN_TITLE_RIGHT", right_cap, 0)
     win.blit("GEN_TOP_LEFT", 0, 0)
     win.blit("GEN_TOP_RIGHT", W - PIECE_W, 0)
-    tx = (W - PIECE_W * 3) // 2
-    win.blit("GEN_TITLE_LEFT", tx, 0)
-    win.blit("GEN_TITLE_FILL", tx + PIECE_W, 0)
-    win.blit("GEN_TITLE_RIGHT", tx + 2 * PIECE_W, 0)
     win.tile_down("GEN_LEFT_BORDER", 0, TITLE_H, H - TITLE_H - BOTTOM_H)
     win.tile_down("GEN_RIGHT_BORDER", W - RIGHT_W, TITLE_H, H - TITLE_H - BOTTOM_H)
     win.tile_across("GEN_BOTTOM_FILL", PIECE_W, content_bottom, W - 2 * PIECE_W)
     win.blit("GEN_BOTTOM_LEFT", 0, content_bottom)
     win.blit("GEN_BOTTOM_RIGHT", W - PIECE_W, content_bottom)
 
-    win.gen_text(letters, title, (W - gen_text_width(letters, title)) // 2,
+    win.gen_text(letters, title,
+                 plate_x + (right_cap - plate_x - gen_text_width(letters, title)) // 2,
                  (TITLE_H - LETTER_H) // 2)
 
     # tabs. Dark text in the real font, as Winamp draws these grey buttons.
@@ -170,7 +176,7 @@ def render(skin, sprites, letters, W, H, title="ARTISTS", where="", tab=0, selec
         d.text((x + BUTTON_W // 2, tab_y + BUTTON_H // 2), name, font=label_font,
                fill="#101010", anchor="mm")
 
-    # list
+    # list, with the "already in the playlist" marks down the left
     font = ui_font(9)
     visible = max(1, list_h // ROW_H)
     for i, (label, meta, container) in enumerate(SAMPLE[:visible]):
@@ -178,21 +184,34 @@ def render(skin, sprites, letters, W, H, title="ARTISTS", where="", tab=0, selec
         if i in selected:
             d.rectangle([list_x, y, list_x + list_w - 1, y + ROW_H - 1],
                         fill=style["selectedbg"])
+        added = ADDED.get(i, 0)
+        if added:
+            mx, my, sz = list_x + 3, y + (ROW_H - 5) // 2, 5
+            box = [mx, my, mx + sz - 1, my + sz - 1]
+            if added == 2:
+                d.rectangle(box, fill=style["current"])
+            else:
+                d.rectangle(box, outline=style["current"])
         colour = style["current"] if container else style["normal"]
-        d.text((list_x + 4, y + 2), label, font=font, fill=colour)
+        d.text((list_x + MARK_GUTTER + 3, y + 2), label, font=font, fill=colour)
         if meta:
             d.text((list_x + list_w - 4, y + 2), meta, font=font, fill=colour, anchor="ra")
 
     win.blit("GENEX_SCROLL_HANDLE", W - RIGHT_W - SCROLL_W, list_y)
 
     # bottom buttons
-    for i, label in enumerate(["DONE", "ADD"]):
+    for i, label in enumerate(["DONE", "ADD", "OPTIONS"]):
         x = W - RIGHT_W - PAD - (i + 1) * BUTTON_W - i * BUTTON_GAP
         win.blit("GENEX_BUTTON", x, button_row_y)
         d.text((x + BUTTON_W // 2, button_row_y + BUTTON_H // 2), label, font=label_font,
                fill="#101010", anchor="mm")
     if where:
-        d.text((LEFT_W + 4, button_row_y + 4), "◀ " + where, font=font, fill=style["normal"])
+        # Truncated the same way the app truncates it, so the preview cannot flatter itself.
+        room = W - RIGHT_W - PAD - 3 * BUTTON_W - 2 * BUTTON_GAP - LEFT_W - 12
+        line = where
+        while d.textlength(line, font=font) > room and len(line) > 2:
+            line = line[:-2] + "\u2026"
+        d.text((LEFT_W + 4, button_row_y + 4), line, font=font, fill=style["current"])
     return win.img
 
 

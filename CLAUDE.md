@@ -141,7 +141,17 @@ If you find yourself designing something in this list, stop and ask.
    `null` for artist/album/title (duration works); MediaStore reports `<unknown>`. We parse
    tags ourselves. This is the project's main technical risk.
 10. **Positions and durations are milliseconds** throughout.
-11. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
+11. **There is no equalizer, tone control or filter in this API.** Nothing to drive, and
+    this unit reports `dspActive=false`, `hasDspSetting=false`, `isHasDSP=false`. Do not
+    build an EQ window: it would be sliders wired to nothing, and it would contradict the
+    reason the project exists — the path to the DACs stays untouched.
+12. **`getSpectrum` is real and drives the analyser**, but its response shape was never
+    captured during the survey. The parser takes whatever numeric array it finds and
+    self-calibrates against a decaying peak, and it logs the first raw body: read that in
+    the on-device console and replace the guess with the fact.
+13. **Poll it five times a second, not thirty.** Safe request spacing is 0.15 s; the window
+    eases between frames to look continuous.
+14. **`getState.playingMusic` carries the audio format** — `sampleRateNumber` (Hz),
     `bitrate` (text, e.g. `"1411.20 Kbps"`), `bits` and `channels`. That is everything the
     main window's kbps / kHz / mono-stereo displays need. Not every source fills them in,
     so fall back to our own parsed tags rather than showing a guess.

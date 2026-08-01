@@ -2,11 +2,22 @@
 
 ---
 
-## STATUS — 1 August 2026, evening (read this first)
+## STATUS — 1 August 2026, night (read this first)
 
-**Build `v0.13-browser`. Phases 0–3 complete and confirmed on the device. Phase 4: three
-skinned windows — the main window, the playlist editor and the library browser. The
-playlist window is confirmed working on the device; the browser is previewed but not yet.**
+**Build `v0.14-vis`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
+The playlist window is confirmed on the device; the browser and the analyser are not yet.**
+
+### There will be no equalizer window, and that is the finding
+
+The plan called for the EQ next. It cannot be built honestly: **the device's API exposes no
+equalizer, no tone control and no filters**, and this unit reports `dspActive=false`,
+`hasDspSetting=false`, `isHasDSP=false`. Ten sliders wired to nothing would also promise the
+one thing this player exists to avoid — the signal reaching the DACs untouched is the entire
+reason for the design. The EQ button now says so in the title bar instead.
+
+The visualiser was the other half of that phase and it is real: `getSpectrum` serves live
+FFT from the device's own DSP.
 
 **There is no unskinned interface left.** The plain green list from Phases 1–3 (`PlayerUi`)
 is deleted: it was still reachable from the eject button, which was the first thing the
@@ -76,6 +87,35 @@ sometimes the folder tree is the only thing that makes sense.
   skin's own 5×6 font is green for a black LCD and unreadable on a grey button, so button
   labels are drawn in the real font in near-black, as Winamp draws them.
 
+**The spectrum analyser** (v0.14) — 19 bars in the 76×16 LCD at 24,43, coloured from the
+skin's own `viscolor.txt` (0 background, 1 grid, 2–17 the gradient, 23 the peak dots — the
+file's own comments confirm the roles). Tapping it turns it off and on, and the setting is
+remembered.
+
+Two things it has to get right: **the device is polled five times a second, not thirty** —
+API_FINDINGS puts safe request spacing at 0.15 s and this is a small box that is also
+decoding audio — and the drawn bars ease towards the measured ones at 25 fps, which is what
+makes five updates a second look continuous. Only the vis rectangle is invalidated, so the
+rest of the window is not repainted 25 times a second.
+
+**The shape of the `getSpectrum` response was never captured** in the API survey, so the
+parser takes whatever numeric array it finds (`fft_value`, `fft_level`, `freqs_value`) and
+scales it against a slowly-decaying peak — self-calibrating whether the device reports
+magnitudes or decibels. It logs the first raw response, so replace the guesswork with the
+real shape from the on-device console once it has run.
+
+**Zoom, ×1 / ×1.5 / ×2** (v0.14) — OPTIONS in the browser, MISC → MISC OPTS in the playlist.
+A row 13 skin px tall is about 3 mm on this screen: fine to read, unpleasant to hit. Because
+these are pixel art the zoom multiplies the *window scale* rather than stretching text, so
+×1.5 of a ×4 window is drawn at ×6 — bigger everything, fewer rows, still crisp. ×2 asks for
+×8, which would need a 250 px-wide window against Winamp's 275 px minimum, so it lands on
+×7. `WindowScales` does that arithmetic and the JVM tests check every level fits.
+
+**The browser marks what is already in the playlist** (v0.14): a filled square for all of
+it, hollow for some. That is also the answer to "did ADD work?" — the message on the bottom
+bar is the other half, and it is drawn *in the window* because this is an overlay above
+everything and a Toast behind it is no feedback at all.
+
 **kbps / kHz / mono–stereo now show real figures** (v0.12). They had never been wired to
 anything: `MainWindowView.setQuality` existed and nobody called it, so the two LCD boxes sat
 empty. `getState.playingMusic` carries `sampleRateNumber`, `bitrate`, `bits` and `channels`;
@@ -85,9 +125,11 @@ x 109–126 and x 154–166 in `main.bmp`.
 
 ### Not done
 
-* **Equalizer window** — the EQ button toasts and does nothing. **Next piece of work**, and
-  the spectrum analyser in the main window's LCD belongs with it: the device serves live FFT
-  from `getSpectrum` (API_FINDINGS §4.4) and the vis area is the 76×16 box at x 24, y 43.
+* **Equalizer window** — not possible on this device, see the box at the top. The button
+  explains itself rather than opening a decoration.
+* **Oscilloscope mode** — Winamp's vis cycled analyser → oscilloscope → off. `getSpectrum`
+  gives frequency data only, so there is nothing honest to draw an oscilloscope from; the
+  tap toggles the analyser on and off instead.
 * Playlist **windowshade** mode — the collapse button next to the X closes the window
   instead, which is honest but not what Winamp does.
 * ADD URL, REM MISC and MISC OPTS toast an explanation instead of acting. ADD URL never

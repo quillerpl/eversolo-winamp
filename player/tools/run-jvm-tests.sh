@@ -77,6 +77,7 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/ListMath.java\"" >> "$
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenGeometry.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenSprites.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/SkinSprites.java\"" >> "$SRC"
+echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >> "$SRC"
 for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done

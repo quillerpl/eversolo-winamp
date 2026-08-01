@@ -63,6 +63,8 @@ public final class PlaylistWindowView extends View {
         void onClose();
         /** The user touched this window, so it should look like the active one. */
         void onFocused();
+        /** An index into {@link ZoomChooser#LEVELS}, from MISC OPTS. */
+        void onZoom(int level);
     }
 
     /** One line of the list, already formatted - the view does no library lookups. */
@@ -93,6 +95,9 @@ public final class PlaylistWindowView extends View {
     // ---- transient interaction state ----
     private String openMenu = null;         // "add" / "rem" / "sel" / "misc" / "list"
     private String pressed = null;          // widget or menu item being held
+    /** MISC OPTS opens this; Winamp's own options were a plain dialog too. */
+    private final ZoomChooser zoom = new ZoomChooser();
+    private int zoomPressed = -1;
     private boolean draggingScrollbar = false;
     private boolean draggingList = false;
     private float dragStartY;
@@ -151,6 +156,11 @@ public final class PlaylistWindowView extends View {
         if (focused != f) { focused = f; invalidate(); }
     }
 
+    public void setZoom(int index) {
+        zoom.setCurrent(index);
+        invalidate();
+    }
+
     /**
      * Replace the list. The scroll position is kept where it was, and the playing track is
      * scrolled into view, so the window does not jump about while the music advances.
@@ -195,6 +205,7 @@ public final class PlaylistWindowView extends View {
         drawScrollbar(canvas);
         drawTimes(canvas);
         drawOpenMenu(canvas);
+        zoom.draw(canvas, skin, blit, text, geo.menuButton(3), zoomPressed);
         drawTitleButtons(canvas);
 
         canvas.restore();
@@ -487,6 +498,14 @@ public final class PlaylistWindowView extends View {
     private boolean down(float x, float y) {
         if (callbacks != null) callbacks.onFocused();
 
+        // The zoom chooser, if it is up, takes the touch before anything else.
+        if (zoom.isOpen()) {
+            zoomPressed = zoom.hit(geo.menuButton(3), x, y);
+            if (zoomPressed < 0) zoom.close();
+            invalidate();
+            return true;
+        }
+
         // An open menu swallows the next touch: either an item, or a tap to dismiss it.
         Item[] items = itemsOf(openMenu);
         if (items != null) {
@@ -560,6 +579,18 @@ public final class PlaylistWindowView extends View {
     }
 
     private boolean up(float x, float y) {
+        if (zoom.isOpen()) {
+            int which = zoom.hit(geo.menuButton(3), x, y);
+            if (which >= 0 && which == zoomPressed && callbacks != null) {
+                zoom.setCurrent(which);
+                zoom.close();
+                callbacks.onZoom(which);
+            }
+            zoomPressed = -1;
+            invalidate();
+            return true;
+        }
+
         String was = pressed;
         boolean wasDraggingList = draggingList;
         pressed = null;
@@ -633,7 +664,8 @@ public final class PlaylistWindowView extends View {
 
             case "sort_list": callbacks.onSortList(); break;
             case "file_info": callbacks.onFileInfo(firstSelected()); break;
-            case "misc_opts": callbacks.onMiscOptions(); break;
+            // Winamp's own options lived behind this button, so the zoom chooser does too.
+            case "misc_opts": zoom.open(); break;
 
             case "new_list":  selected.clear(); callbacks.onClearList(); break;
             case "save_list": callbacks.onSaveList(); break;

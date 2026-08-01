@@ -1,7 +1,9 @@
 import org.eversolo.winamp.skin.GenGeometry;
 import org.eversolo.winamp.skin.ListMath;
 import org.eversolo.winamp.skin.PlaylistGeometry;
+import org.eversolo.winamp.skin.GenSprites;
 import org.eversolo.winamp.skin.PleditStyle;
+import org.eversolo.winamp.skin.WindowScales;
 
 import java.util.Objects;
 
@@ -166,6 +168,28 @@ public class PlaylistGeometryTest {
         check("second row", b.rowAt(b.listY() + 13, 0, 40), 1);
         check("below the list misses", b.rowAt(b.listY() + b.listH(), 0, 40), -1);
         check("scrolling clamps", b.clampOffset(999, 40), 40 - 14);
+
+        System.out.println("\n=== zoom: whole scales only, and always on screen ===");
+        // The Eversolo's app window, and the three zoom settings offered in both windows.
+        final int SW = 2000, SH = 1080, WANTED = 12;
+        check("main window as large as it goes", WindowScales.main(SW, SH), 7);
+        check("playlist's natural scale", WindowScales.natural(SW, SH, WANTED), 4);
+        check("x1", WindowScales.zoomed(SW, SH, WANTED, 1f), 4);
+        check("x1.5", WindowScales.zoomed(SW, SH, WANTED, 1.5f), 6);
+        check("x2 backs off to what fits", WindowScales.zoomed(SW, SH, WANTED, 2f), 7);
+        for (float z : new float[]{1f, 1.5f, 2f}) {
+            int s = WindowScales.zoomed(SW, SH, WANTED, z);
+            int pw = PlaylistGeometry.widthFor(SW, s), ph = PlaylistGeometry.heightFor(SH, s);
+            check("x" + z + " playlist fits the screen",
+                    pw * s <= SW && ph * s <= SH, true);
+            check("x" + z + " shows at least four rows",
+                    PlaylistGeometry.rowsIn(ph) >= 4, true);
+            GenGeometry browser = new GenGeometry(SW / s, SH / s);
+            check("x" + z + " browser tabs still fit",
+                    browser.tab(3).x + browser.tab(3).w < browser.width, true);
+            check("x" + z + " browser buttons still fit",
+                    browser.bottomButton(2).x > GenSprites.LEFT_W, true);
+        }
 
         System.out.println("\n=== shared list arithmetic ===");
         check("nothing to scroll", ListMath.maxOffset(5, 15), 0);

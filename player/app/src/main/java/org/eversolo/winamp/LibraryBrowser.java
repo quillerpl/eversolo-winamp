@@ -7,7 +7,9 @@ import org.eversolo.winamp.skin.BrowserWindowView;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * What the browser window is looking at, and what tapping things does.
@@ -30,7 +32,8 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
     public interface Host {
         void onAddTracks(List<Track> tracks, String what);
         void onImportM3u(File file);
-        void onRowsChanged(String title, String where, List<BrowserWindowView.Row> rows, int tab);
+        void onRowsChanged(String title, String where, List<BrowserWindowView.Row> rows,
+                           int tab, boolean keepView);
         void onStatus(String status);
     }
 
@@ -42,6 +45,7 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
     private MusicIndex.Album album;        // set while inside an album
     private File folder;                   // set while inside a folder
     private List<File> folderItems = new ArrayList<>();
+    private Set<String> inPlaylist = new HashSet<>();
 
     public LibraryBrowser(MusicLibrary library, Host host) {
         this.library = library;
@@ -55,26 +59,34 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
 
     @Override public void onLibraryStatus(String status) { host.onStatus(status); }
 
-    @Override public void onLibraryReady() { refresh(); }
+    @Override public void onLibraryReady() { refresh(false); }
 
     public void openTab(int which) {
         tab = which;
         artist = null;
         album = null;
         folder = null;
-        refresh();
+        refresh(false);
     }
 
-    /** Where LOAD LIST lands. */
-    public void openM3uTab() { openTab(TAB_M3U); }
+    /**
+     * What is already in the playlist, so rows can say so. Paths, because that is the only
+     * stable identity a track has on this device.
+     */
+    public void setPlaylistPaths(Set<String> paths) {
+        this.inPlaylist = paths == null ? new HashSet<>() : paths;
+    }
 
-    public void refresh() {
+    public void refresh() { refresh(false); }
+
+    /** {@code keepView} leaves the scroll position alone - see BrowserWindowView.setRows. */
+    public void refresh(boolean keepView) {
         if (!library.isReady()) {
-            host.onRowsChanged(title(), "", new ArrayList<>(), tab);
+            host.onRowsChanged(title(), "", new ArrayList<>(), tab, keepView);
             host.onStatus(library.status());
             return;
         }
-        host.onRowsChanged(title(), where(), buildRows(), tab);
+        host.onRowsChanged(title(), where(), buildRows(), tab, keepView);
     }
 
     /** The gen.bmp title alphabet is capitals only, so these stay plain words. */
@@ -110,13 +122,14 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
                 } else if (artist != null) {
                     for (MusicIndex.Album a : index.albumsOf(artist)) {
                         rows.add(new BrowserWindowView.Row(a.name,
-                                a.tracks.size() + " tracks", true));
+                                a.tracks.size() + " tracks", true, addedState(a.tracks)));
                     }
                 } else {
                     for (String name : index.artists()) {
-                        int tracks = 0;
-                        for (MusicIndex.Album a : index.albumsOf(name)) tracks += a.tracks.size();
-                        rows.add(new BrowserWindowView.Row(name, tracks + " tracks", true));
+                        List<Track> all = new ArrayList<>();
+                        for (MusicIndex.Album a : index.albumsOf(name)) all.addAll(a.tracks);
+                        rows.add(new BrowserWindowView.Row(name, all.size() + " tracks", true,
+                                addedState(all)));
                     }
                 }
                 break;
@@ -126,7 +139,7 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
                 } else {
                     for (MusicIndex.Album a : library.allAlbums()) {
                         rows.add(new BrowserWindowView.Row(a.artist + "  -  " + a.name,
-                                a.tracks.size() + " tracks", true));
+                                a.tracks.size() + " tracks", true, addedState(a.tracks)));
                     }
                 }
                 break;
@@ -137,12 +150,14 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
                     Track t = dir ? null : library.byPath(f.getAbsolutePath());
                     rows.add(new BrowserWindowView.Row(
                             folder == null ? f.getAbsolutePath() : f.getName(),
-                            dir ? "" : (t == null ? "" : t.formattedDuration()), dir));
+                            dir ? "" : (t == null ? "" : t.formattedDuration()), dir,
+                            dir ? folderState(f) : fileState(f)));
                 }
                 break;
             case TAB_M3U:
                 for (File f : library.m3uFiles()) {
-                    rows.add(new BrowserWindowView.Row(f.getName(), f.getParent(), false));
+                    rows.add(new BrowserWindowView.Row(f.getName(), f.getParent(), false,
+                            BrowserWindowView.NOT_ADDED));
                 }
                 break;
             default:
@@ -154,8 +169,40 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
     private void addTrackRows(List<BrowserWindowView.Row> rows, List<Track> tracks) {
         for (Track t : tracks) {
             String num = t.trackNumber == null ? "" : String.format("%2d. ", t.trackNumber);
-            rows.add(new BrowserWindowView.Row(num + t.title, t.formattedDuration(), false));
+            rows.add(new BrowserWindowView.Row(num + t.title, t.formattedDuration(), false,
+                    inPlaylist.contains(t.absolutePath)
+                            ? BrowserWindowView.ALL_ADDED : BrowserWindowView.NOT_ADDED));
         }
+    }
+
+    // ---------------------------------------------------------------- already added?
+
+    /** All of these tracks in the playlist, some of them, or none. */
+    private int addedState(List<Track> tracks) {
+        if (tracks.isEmpty() || inPlaylist.isEmpty()) return BrowserWindowView.NOT_ADDED;
+        int found = 0;
+        for (Track t : tracks) if (inPlaylist.contains(t.absolutePath)) found++;
+        if (found == 0) return BrowserWindowView.NOT_ADDED;
+        return found == tracks.size()
+                ? BrowserWindowView.ALL_ADDED : BrowserWindowView.PART_ADDED;
+    }
+
+    private int fileState(File f) {
+        return inPlaylist.contains(f.getAbsolutePath())
+                ? BrowserWindowView.ALL_ADDED : BrowserWindowView.NOT_ADDED;
+    }
+
+    /**
+     * For a folder we only ask whether anything under it is in the playlist, never whether
+     * all of it is: answering that would mean walking the tree for every row on screen, and
+     * "something from here is already in" is what the question really is.
+     */
+    private int folderState(File dir) {
+        String prefix = dir.getAbsolutePath() + "/";
+        for (String path : inPlaylist) {
+            if (path.startsWith(prefix)) return BrowserWindowView.PART_ADDED;
+        }
+        return BrowserWindowView.NOT_ADDED;
     }
 
     // ---------------------------------------------------------------- navigation
@@ -186,25 +233,25 @@ public final class LibraryBrowser implements MusicLibrary.Listener {
             default:
                 break;
         }
-        refresh();
+        refresh(false);
     }
 
     /** True if there was somewhere to go. */
     public boolean up() {
         switch (tab) {
             case TAB_ARTIST:
-                if (album != null) { album = null; refresh(); return true; }
-                if (artist != null) { artist = null; refresh(); return true; }
+                if (album != null) { album = null; refresh(false); return true; }
+                if (artist != null) { artist = null; refresh(false); return true; }
                 return false;
             case TAB_ALBUM:
-                if (album != null) { album = null; refresh(); return true; }
+                if (album != null) { album = null; refresh(false); return true; }
                 return false;
             case TAB_FOLDER:
                 if (folder == null) return false;
                 File parent = folder.getParentFile();
                 // Stop at the volume roots rather than wandering up into /storage.
                 folder = (parent == null || isRoot(folder)) ? null : parent;
-                refresh();
+                refresh(false);
                 return true;
             default:
                 return false;

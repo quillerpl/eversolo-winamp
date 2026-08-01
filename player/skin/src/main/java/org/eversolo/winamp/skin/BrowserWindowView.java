@@ -36,6 +36,8 @@ public final class BrowserWindowView extends View {
 
     private static final String TAG = "BrowserWindow";
     private static final float DRAG_SLOP = 4f;
+    /** How long "Added 13 tracks" stays on the bottom bar. */
+    private static final long FLASH_MS = 3000;
 
     public interface Callbacks {
         /** A container row: open it. */
@@ -47,7 +49,14 @@ public final class BrowserWindowView extends View {
         void onAdd(List<Integer> selected);
         void onClose();
         void onFocused();
+        /** An index into {@link ZoomChooser#LEVELS}. */
+        void onZoom(int level);
     }
+
+    /** Nothing of this row is in the playlist / some of it is / all of it is. */
+    public static final int NOT_ADDED = 0;
+    public static final int PART_ADDED = 1;
+    public static final int ALL_ADDED = 2;
 
     /** One line. The view does not know or care what it stands for. */
     public static final class Row {
@@ -55,14 +64,21 @@ public final class BrowserWindowView extends View {
         public final String meta;
         /** Containers open when tapped; leaves select. */
         public final boolean container;
-        public Row(String label, String meta, boolean container) {
+        /** NOT_ADDED / PART_ADDED / ALL_ADDED — drawn as a marker down the left edge. */
+        public final int added;
+        public Row(String label, String meta, boolean container, int added) {
             this.label = label == null ? "" : label;
             this.meta = meta == null ? "" : meta;
             this.container = container;
+            this.added = added;
         }
     }
 
     private static final String[] TABS = {"ARTIST", "ALBUM", "FOLDER", "M3U"};
+    /** Bottom row, right to left. */
+    private static final String[] BUTTONS = {"DONE", "ADD", "OPTIONS"};
+    /** Space down the left of every row for the "already added" mark. */
+    private static final int MARK_GUTTER = 8;
 
     // ---- model ----
     private Skin skin;
@@ -74,12 +90,18 @@ public final class BrowserWindowView extends View {
     private String title = "LIBRARY";
     private String where = "";              // the "up one level" row, empty when at the top
     private String status = "";             // shown instead of the list while scanning
+    private String flash = "";              // "Added 13 tracks", for a few seconds
+    private final ZoomChooser zoom = new ZoomChooser();
     private List<Row> rows = new ArrayList<>();
     private int tab = 0;
     private int offset = 0;
     private final Set<Integer> selected = new LinkedHashSet<>();
 
+    /** Where the title plate ended up, so the text can be centred on it. */
+    private int titlePlateX, titlePlateW;
+
     private String pressed = null;
+    private int zoomPressed = -1;
     private boolean draggingScrollbar, draggingList;
     private float dragStartY;
     private int dragStartOffset;
@@ -115,14 +137,40 @@ public final class BrowserWindowView extends View {
 
     public void setCallbacks(Callbacks c) { this.callbacks = c; }
 
-    /** Replace the list. Scroll and selection start again: this is a new place. */
-    public void setRows(String title, String where, List<Row> newRows, int tab) {
+    /**
+     * Replace the list.
+     *
+     * {@code keepView} is the difference between navigating somewhere new, which starts at
+     * the top with nothing selected, and the same list being handed back with fresh
+     * "already added" marks - where losing your scroll position would be maddening.
+     */
+    public void setRows(String title, String where, List<Row> newRows, int tab,
+                        boolean keepView) {
         this.title = title == null ? "" : title;
         this.where = where == null ? "" : where;
         this.rows = newRows == null ? new ArrayList<Row>() : newRows;
         this.tab = tab;
-        this.offset = 0;
-        selected.clear();
+        if (keepView) {
+            offset = geo.clampOffset(offset, rows.size());
+        } else {
+            offset = 0;
+            selected.clear();
+        }
+        invalidate();
+    }
+
+    /** A short-lived line along the bottom: what just happened. */
+    public void flash(String message) {
+        this.flash = message == null ? "" : message;
+        invalidate();
+        removeCallbacks(clearFlash);
+        postDelayed(clearFlash, FLASH_MS);
+    }
+
+    private final Runnable clearFlash = () -> { flash = ""; invalidate(); };
+
+    public void setZoom(int index) {
+        zoom.setCurrent(index);
         invalidate();
     }
 
@@ -164,15 +212,7 @@ public final class BrowserWindowView extends View {
         c.drawRect(GenSprites.LEFT_W, GenSprites.TITLE_H,
                 W - GenSprites.RIGHT_W, H - GenSprites.BOTTOM_H, fill);
 
-        tileAcross(c, "GEN_TOP_FILL", GenSprites.PIECE_W, 0, W - 2 * GenSprites.PIECE_W);
-        sprite(c, "GEN_TOP_LEFT", 0, 0);
-        sprite(c, "GEN_TOP_RIGHT", W - GenSprites.PIECE_W, 0);
-
-        int titleW = GenSprites.PIECE_W * 3;
-        int tx = (W - titleW) / 2;
-        sprite(c, "GEN_TITLE_LEFT", tx, 0);
-        sprite(c, "GEN_TITLE_FILL", tx + GenSprites.PIECE_W, 0);
-        sprite(c, "GEN_TITLE_RIGHT", tx + 2 * GenSprites.PIECE_W, 0);
+        drawTitleBar(c, W);
 
         tileDown(c, "GEN_LEFT_BORDER", 0, GenSprites.TITLE_H,
                 H - GenSprites.TITLE_H - GenSprites.BOTTOM_H);
@@ -190,12 +230,39 @@ public final class BrowserWindowView extends View {
         }
     }
 
+    /**
+     * The title bar: two corners, the gold bar tiled between them, and a dark plate in the
+     * middle for the text.
+     *
+     * The plate is built to fit the title rather than being a fixed width, which is what
+     * Winamp does and what stops a long title running out over the gold lines. Only two
+     * pieces of the bar repeat seamlessly - the plate and the bar itself - so those are the
+     * only two that get tiled; the rest are the transitions between them.
+     */
+    private void drawTitleBar(Canvas c, int W) {
+        final int piece = GenSprites.PIECE_W;
+        int plateW = Math.max(piece, GenSprites.textWidth(
+                title.toUpperCase(java.util.Locale.UK)) + 10);
+        int plateX = Math.max(piece, (W - plateW) / 2);
+        int rightCapX = Math.min(W - 2 * piece, plateX + plateW);
+
+        tileAcross(c, "GEN_TOP_FILL", piece, 0, W - 2 * piece);
+        sprite(c, "GEN_TITLE_LEFT", plateX - piece, 0);
+        tileAcross(c, "GEN_TITLE_FILL", plateX, 0, rightCapX - plateX);
+        sprite(c, "GEN_TITLE_RIGHT", rightCapX, 0);
+        sprite(c, "GEN_TOP_LEFT", 0, 0);
+        sprite(c, "GEN_TOP_RIGHT", W - piece, 0);
+
+        titlePlateX = plateX;
+        titlePlateW = rightCapX - plateX;
+    }
+
     /** The window title, in gen.bmp's own alphabet. It has capitals only, so upper-case it. */
     private void drawTitle(Canvas c) {
         Bitmap gen = skin.bmp("gen.bmp");
         if (gen == null) return;
         String s = title.toUpperCase(java.util.Locale.UK);
-        int x = (geo.width - GenSprites.textWidth(s)) / 2;
+        int x = titlePlateX + (titlePlateW - GenSprites.textWidth(s)) / 2;
         int y = geo.titleTextY();
         for (int i = 0; i < s.length(); i++) {
             int[] l = GenSprites.LETTERS.get(s.charAt(i));
@@ -255,12 +322,14 @@ public final class BrowserWindowView extends View {
                 fill.setColor(style.selectedBg);
                 c.drawRect(x, y, x + w, y + GenGeometry.ROW_H, fill);
             }
+            drawAddedMark(c, r.added, x + 3, y);
             // Folders and albums are what you open; Winamp's own library shows them
             // brighter than the tracks inside them.
             text.setColor(r.container ? style.current : style.normal);
             text.setTextAlign(Paint.Align.LEFT);
             float metaW = r.meta.isEmpty() ? 0 : text.measureText(r.meta) + 6;
-            c.drawText(fit(r.label, w - metaW - 8), x + 4, y + lift, text);
+            c.drawText(fit(r.label, w - metaW - MARK_GUTTER - 8), x + MARK_GUTTER + 3,
+                    y + lift, text);
             if (!r.meta.isEmpty()) {
                 text.setTextAlign(Paint.Align.RIGHT);
                 c.drawText(r.meta, x + w - 4, y + lift, text);
@@ -270,6 +339,29 @@ public final class BrowserWindowView extends View {
         c.restore();
     }
 
+    /**
+     * The "this is already in the playlist" mark: a filled square for all of it, a hollow
+     * one for some of it, nothing otherwise.
+     *
+     * Drawn rather than written, because a tick or a bullet is at the mercy of whatever
+     * glyphs the device's font happens to carry, and this is the answer to "did my tap do
+     * anything?" - it has to be there.
+     */
+    private void drawAddedMark(Canvas c, int added, int x, int rowY) {
+        if (added == NOT_ADDED) return;
+        int size = 5;
+        int y = rowY + (GenGeometry.ROW_H - size) / 2;
+        fill.setColor(style.current);
+        if (added == ALL_ADDED) {
+            c.drawRect(x, y, x + size, y + size, fill);
+        } else {
+            c.drawRect(x, y, x + size, y + 1, fill);
+            c.drawRect(x, y + size - 1, x + size, y + size, fill);
+            c.drawRect(x, y, x + 1, y + size, fill);
+            c.drawRect(x + size - 1, y, x + size, y + size, fill);
+        }
+    }
+
     private void drawScrollbar(Canvas c) {
         if (geo.maxOffset(rows.size()) <= 0) return;
         sprite(c, draggingScrollbar ? "GENEX_SCROLL_HANDLE_PRESSED" : "GENEX_SCROLL_HANDLE",
@@ -277,25 +369,30 @@ public final class BrowserWindowView extends View {
     }
 
     private void drawBottomButtons(Canvas c) {
-        String[] labels = {"DONE", "ADD"};
-        for (int i = 0; i < labels.length; i++) {
+        for (int i = 0; i < BUTTONS.length; i++) {
             PlaylistGeometry.Box b = geo.bottomButton(i);
-            boolean held = labels[i].toLowerCase(java.util.Locale.UK).equals(pressed);
+            boolean held = BUTTONS[i].toLowerCase(java.util.Locale.UK).equals(pressed);
             sprite(c, held ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON", b.x, b.y);
-            buttonLabel(c, labels[i], b);
+            buttonLabel(c, BUTTONS[i], b);
         }
-        // Where we are, drawn along the bottom bar: any characters at all can appear in an
-        // album name, so this uses the real font rather than gen.bmp's capitals-only one.
-        if (!where.isEmpty()) {
-            text.setColor(style.normal);
+        zoom.draw(c, skin, blit, text, geo.bottomButton(2), zoomPressed);
+
+        // The bottom line: what just happened, or where we are. Any characters at all can
+        // appear in an album name, so this uses the real font rather than gen.bmp's
+        // capitals-only one.
+        String line = !flash.isEmpty() ? flash
+                // Plain ASCII on purpose: this is the way back out of a folder, and a glyph
+                // the device's font happened not to carry would leave a box where the arrow
+                // goes.
+                : (where.isEmpty() ? "" : "<< " + where);
+        if (!line.isEmpty()) {
+            text.setColor(flash.isEmpty() ? style.normal : style.current);
             text.setTextAlign(Paint.Align.LEFT);
             text.getFontMetrics(metrics);
             float y = geo.buttonRowY() + (GenSprites.BUTTON_H
                     - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
-            float room = geo.bottomButton(1).x - GenSprites.LEFT_W - 12;
-            // Plain ASCII on purpose: this is the way back out of a folder, and a glyph the
-            // device's font happened not to carry would leave a box where the arrow goes.
-            c.drawText(fit("<< " + where, room), GenSprites.LEFT_W + 4, y, text);
+            float room = geo.bottomButton(2).x - GenSprites.LEFT_W - 12;
+            c.drawText(fit(line, room), GenSprites.LEFT_W + 4, y, text);
         }
     }
 
@@ -366,12 +463,25 @@ public final class BrowserWindowView extends View {
     private boolean down(float x, float y) {
         if (callbacks != null) callbacks.onFocused();
 
+        // An open chooser swallows the touch: an item, or a tap anywhere to dismiss it.
+        if (zoom.isOpen()) {
+            zoomPressed = zoom.hit(geo.bottomButton(2), x, y);
+            if (zoomPressed < 0) zoom.close();
+            invalidate();
+            return true;
+        }
+
         if (geo.closeButton().contains(x, y)) { pressed = "close"; invalidate(); return true; }
         for (int i = 0; i < TABS.length; i++) {
             if (geo.tab(i).contains(x, y)) { pressed = "tab" + i; invalidate(); return true; }
         }
-        if (geo.bottomButton(0).contains(x, y)) { pressed = "done"; invalidate(); return true; }
-        if (geo.bottomButton(1).contains(x, y)) { pressed = "add"; invalidate(); return true; }
+        for (int i = 0; i < BUTTONS.length; i++) {
+            if (geo.bottomButton(i).contains(x, y)) {
+                pressed = BUTTONS[i].toLowerCase(java.util.Locale.UK);
+                invalidate();
+                return true;
+            }
+        }
         // The whole bottom-left strip is the "up one level" target: it shows where you are,
         // and a big target beats a small one on a touchscreen.
         if (!where.isEmpty() && y >= geo.buttonRowY() && x < geo.bottomButton(1).x) {
@@ -413,6 +523,19 @@ public final class BrowserWindowView extends View {
     }
 
     private boolean up(float x, float y) {
+        // A held zoom item fires when the finger comes up on it.
+        if (zoom.isOpen()) {
+            int which = zoom.hit(geo.bottomButton(2), x, y);
+            if (which >= 0 && which == zoomPressed && callbacks != null) {
+                zoom.setCurrent(which);
+                zoom.close();
+                callbacks.onZoom(which);
+            }
+            zoomPressed = -1;
+            invalidate();
+            return true;
+        }
+
         String was = pressed;
         pressed = null;
         draggingScrollbar = false;
@@ -428,6 +551,8 @@ public final class BrowserWindowView extends View {
             if (callbacks != null) callbacks.onClose();
         } else if ("add".equals(was) && geo.bottomButton(1).contains(x, y)) {
             if (callbacks != null) callbacks.onAdd(sortedSelection());
+        } else if ("options".equals(was) && geo.bottomButton(2).contains(x, y)) {
+            zoom.open();
         } else if ("up".equals(was)) {
             if (callbacks != null) callbacks.onUp();
         } else if (was.startsWith("tab")) {

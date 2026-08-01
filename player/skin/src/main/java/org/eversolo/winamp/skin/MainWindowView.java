@@ -29,6 +29,13 @@ public final class MainWindowView extends View {
     private static final int TITLE_BAR_H = 14;
     private static final long LONG_PRESS_MS = 700;
 
+    /** The visualiser window: 19 bars of 3 px with a pixel between them fills 76. */
+    private static final int VIS_X = 24, VIS_Y = 43, VIS_W = 76, VIS_H = 16;
+    private static final int BARS = 19;
+    /** How fast a bar falls back, and how much slower its peak marker falls, per frame. */
+    private static final float FALL = 0.09f;
+    private static final float PEAK_FALL = 0.02f;
+
     public interface Callbacks {
         void onPrevious();
         void onPlay();
@@ -46,6 +53,8 @@ public final class MainWindowView extends View {
         void onClose();
         /** Long-press the title bar: the on-device log console. */
         void onShowLog();
+        /** Tapping the little black window: spectrum analyser on or off. */
+        void onToggleVisualiser();
     }
 
     // ---- model ----
@@ -67,7 +76,17 @@ public final class MainWindowView extends View {
     private int marqueeOffset = 0;
     private long titleBarDownAt = 0;    // for the long-press that opens the log console
 
+    private String flashText = "";
+    private long flashUntil = 0;
+    private static final long FLASH_MS = 4000;
+
+    private boolean visualiserOn = true;
+    private float[] levels;                          // what the device last reported
+    private final float[] shown = new float[BARS];   // what is drawn, easing towards it
+    private final float[] peaks = new float[BARS];
+
     private final Paint paint = new Paint();
+    private final Paint fill = new Paint();
     private final BitmapFont font = new BitmapFont();
     private final Rect src = new Rect();
     private final Rect dst = new Rect();
@@ -163,6 +182,7 @@ public final class MainWindowView extends View {
                 : paused ? "MAIN_PAUSED_INDICATOR" : "MAIN_STOPPED_INDICATOR";
         sprite(canvas, ind, 26, 28);
 
+        drawVisualiser(canvas);
         drawTime(canvas);
         drawMarquee(canvas);
         drawQuality(canvas);
@@ -171,6 +191,90 @@ public final class MainWindowView extends View {
         drawPosition(canvas);
 
         canvas.restore();
+    }
+
+    // ------------------------------------------------------------------ visualiser
+
+    /**
+     * The spectrum analyser in the little black window, driven by the device's own FFT.
+     *
+     * 19 bars, 3 px wide with a pixel between them, in the 76x16 area at 24,43 - the same
+     * arrangement Winamp used, and the colours come from the skin's viscolor.txt, so it is
+     * the familiar red-through-green gradient. The peak markers fall slowly, as they did.
+     *
+     * The bars shown lag the bars measured: the device is polled about five times a second
+     * (any faster would be rude to a small Android box) and the values are eased towards on
+     * every frame, which is what makes it look continuous rather than steppy.
+     */
+    private void drawVisualiser(Canvas c) {
+        if (!visualiserOn || levels == null) return;
+        VisColors colours = skin.visColors();
+        fill.setColor(colours.get(VisColors.BACKGROUND));
+        c.drawRect(VIS_X, VIS_Y, VIS_X + VIS_W, VIS_Y + VIS_H, fill);
+
+        for (int i = 0; i < BARS; i++) {
+            int x = VIS_X + i * 4;
+            int bar = Math.round(shown[i] * VIS_H);
+            for (int row = 0; row < bar; row++) {
+                int y = VIS_Y + VIS_H - 1 - row;
+                // Row 0 of the gradient is the top of a full-height bar.
+                fill.setColor(colours.spectrum(VIS_H - 1 - row));
+                c.drawRect(x, y, x + 3, y + 1, fill);
+            }
+            int peak = Math.round(peaks[i] * VIS_H);
+            if (peak > 0) {
+                fill.setColor(colours.get(VisColors.PEAK));
+                int y = VIS_Y + VIS_H - 1 - Math.min(VIS_H - 1, peak);
+                c.drawRect(x, y, x + 3, y + 1, fill);
+            }
+        }
+    }
+
+    /** New measurements from the device: 0..1 per bar. */
+    public void setSpectrum(float[] bars) {
+        if (bars == null) return;
+        if (levels == null) levels = new float[BARS];
+        for (int i = 0; i < BARS; i++) {
+            levels[i] = i < bars.length ? clampF(bars[i], 0f, 1f) : 0f;
+        }
+        invalidateVis();
+    }
+
+    /**
+     * Ease the drawn bars towards the measured ones and let the peaks fall. Called on a
+     * timer while the visualiser is on; returns false when everything has settled, so the
+     * caller can stop animating.
+     */
+    public boolean tickVisualiser() {
+        if (!visualiserOn || levels == null) return false;
+        boolean moving = false;
+        for (int i = 0; i < BARS; i++) {
+            float target = levels[i];
+            if (shown[i] < target) shown[i] = target;               // attack is instant
+            else shown[i] = Math.max(target, shown[i] - FALL);      // release falls
+            peaks[i] = Math.max(shown[i], peaks[i] - PEAK_FALL);
+            if (Math.abs(shown[i] - target) > 0.001f || peaks[i] > 0.001f) moving = true;
+        }
+        invalidateVis();
+        return moving;
+    }
+
+    public void setVisualiserOn(boolean on) {
+        if (visualiserOn == on) return;
+        visualiserOn = on;
+        if (!on) {
+            java.util.Arrays.fill(shown, 0f);
+            java.util.Arrays.fill(peaks, 0f);
+        }
+        invalidate();
+    }
+
+    public boolean isVisualiserOn() { return visualiserOn; }
+
+    /** Only the little black window needs repainting, not the whole player. */
+    private void invalidateVis() {
+        invalidate(VIS_X * scale, VIS_Y * scale,
+                (VIS_X + VIS_W) * scale, (VIS_Y + VIS_H) * scale);
     }
 
     private void drawTime(Canvas c) {
@@ -188,15 +292,30 @@ public final class MainWindowView extends View {
         sprite(c, "DIGIT_" + d, x, y);
     }
 
+    /**
+     * Put a message in the title area for a few seconds, over whatever is playing.
+     *
+     * The state poll rewrites the title twice a second, so a message written straight into
+     * it would be gone before it could be read.
+     */
+    public void flashTitle(String message) {
+        flashText = message == null ? "" : message;
+        flashUntil = System.currentTimeMillis() + FLASH_MS;
+        invalidate();
+    }
+
     /** Song title, scrolling when it does not fit - the marquee area is 154x6. */
     private void drawMarquee(Canvas c) {
         Bitmap text = skin.bmp("text.bmp");
-        if (text == null || songTitle.isEmpty()) return;
+        if (text == null) return;
+
+        String showing = System.currentTimeMillis() < flashUntil ? flashText : songTitle;
+        if (showing.isEmpty()) return;
 
         final int areaX = 111, areaY = 24, areaW = 154;
         int charsThatFit = areaW / SkinSprites.CHAR_W;
 
-        String s = songTitle.toUpperCase(Locale.UK);
+        String s = showing.toUpperCase(Locale.UK);
         String draw;
         if (s.length() <= charsThatFit) {
             draw = s;
@@ -348,6 +467,8 @@ public final class MainWindowView extends View {
             // The X on the title bar. Winamp quits from here, and it is the only visible
             // way out of a window that covers the whole screen.
             new Hit("close", 264, 3, 9, 9),
+            // Tapping the visualiser turns it off and on, as it cycled modes in Winamp.
+            new Hit("vis", VIS_X, VIS_Y, VIS_W, VIS_H),
     };
 
     @Override
@@ -423,6 +544,7 @@ public final class MainWindowView extends View {
             case "eq":     callbacks.onToggleEqualizer(); break;
             case "pl":     callbacks.onTogglePlaylist(); break;
             case "close":  callbacks.onClose(); break;
+            case "vis":    callbacks.onToggleVisualiser(); break;
             case "shuffle": callbacks.onShuffle(); break;
             case "repeat": callbacks.onRepeat(); break;
             case "volume": callbacks.onVolume(volumePercent); break;

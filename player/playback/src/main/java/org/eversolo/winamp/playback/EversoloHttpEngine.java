@@ -1,6 +1,7 @@
 package org.eversolo.winamp.playback;
 
 import org.eversolo.winamp.core.Logs;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -265,6 +266,112 @@ public final class EversoloHttpEngine implements PlaybackEngine {
             Logs.w(TAG, "could not parse getState: " + e);
             return null;
         }
+    }
+
+    // ---------------------------------------------------------------- spectrum
+
+    public interface SpectrumListener {
+        /** One value per bar, already normalised to 0..1. */
+        void onSpectrum(float[] bars);
+    }
+
+    private volatile Thread spectrumPoller;
+    private volatile float spectrumPeak = 1f;
+    private volatile boolean loggedSpectrumShape = false;
+
+    /**
+     * Start feeding the visualiser.
+     *
+     * Five times a second, not thirty: this is a small Android box that is also decoding
+     * audio, and API_FINDINGS puts the safe request spacing at 0.15 s. The window eases
+     * between the frames it gets, which is what makes it look continuous.
+     */
+    public void startSpectrum(final SpectrumListener listener, final int bars) {
+        stopSpectrum();
+        final Thread t = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted() && running) {
+                float[] values = fetchSpectrum(bars);
+                if (values != null) {
+                    try { listener.onSpectrum(values); } catch (Exception ignored) {}
+                }
+                try { Thread.sleep(180); } catch (InterruptedException e) { return; }
+            }
+        }, "spectrum-poll");
+        t.setDaemon(true);
+        spectrumPoller = t;
+        t.start();
+        Logs.i(TAG, "spectrum polling started");
+    }
+
+    public void stopSpectrum() {
+        Thread t = spectrumPoller;
+        spectrumPoller = null;
+        if (t != null) {
+            t.interrupt();
+            Logs.i(TAG, "spectrum polling stopped");
+        }
+    }
+
+    /**
+     * Read getSpectrum and boil it down to {@code bars} values in 0..1.
+     *
+     * The exact shape of this response was never captured during the API survey, so this
+     * takes whatever numeric array it can find and scales it against a peak that decays
+     * slowly. That way it self-calibrates whether the device reports magnitudes or
+     * decibels, and it logs the raw body once so the guesswork can be replaced with facts
+     * from the on-device console.
+     */
+    private float[] fetchSpectrum(int bars) {
+        String body = get(BASE + "/ZidooMusicControl/v2/getSpectrum");
+        if (body == null) return null;
+        try {
+            if (!loggedSpectrumShape) {
+                loggedSpectrumShape = true;
+                Logs.i(TAG, "getSpectrum first response: "
+                        + body.substring(0, Math.min(400, body.length())));
+            }
+            JSONObject o = new JSONObject(body);
+            JSONArray a = firstArray(o, "fft_value", "fft_level", "freqs_value", "value");
+            if (a == null || a.length() == 0) return null;
+
+            // Resample whatever came back into the number of bars the window draws.
+            float[] raw = new float[a.length()];
+            float max = 0f;
+            for (int i = 0; i < raw.length; i++) {
+                raw[i] = (float) Math.abs(a.optDouble(i, 0));
+                max = Math.max(max, raw[i]);
+            }
+            spectrumPeak = Math.max(max, spectrumPeak * 0.98f);
+            if (spectrumPeak <= 0.0001f) return null;
+
+            float[] out = new float[bars];
+            for (int i = 0; i < bars; i++) {
+                int from = i * raw.length / bars;
+                int to = Math.max(from + 1, (i + 1) * raw.length / bars);
+                float sum = 0f;
+                for (int j = from; j < to && j < raw.length; j++) sum += raw[j];
+                out[i] = Math.min(1f, (sum / (to - from)) / spectrumPeak);
+            }
+            return out;
+        } catch (Exception e) {
+            Logs.w(TAG, "could not parse getSpectrum: " + e);
+            return null;
+        }
+    }
+
+    private static JSONArray firstArray(JSONObject o, String... names) {
+        for (String n : names) {
+            JSONArray a = o.optJSONArray(n);
+            if (a != null) return a;
+            JSONObject nested = o.optJSONObject(n);
+            if (nested != null) {
+                for (String m : names) {
+                    JSONArray inner = nested.optJSONArray(m);
+                    if (inner != null) return inner;
+                }
+            }
+        }
+        return null;
     }
 
     /**

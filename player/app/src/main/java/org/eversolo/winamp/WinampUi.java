@@ -25,6 +25,8 @@ import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.PlaylistWindowView;
 import org.eversolo.winamp.skin.Skin;
 import org.eversolo.winamp.skin.SkinSprites;
+import org.eversolo.winamp.skin.WindowScales;
+import org.eversolo.winamp.skin.ZoomChooser;
 import org.eversolo.winamp.tags.M3uParser;
 
 import java.io.File;
@@ -33,7 +35,9 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The player as the user sees it: two Winamp windows and, behind a button, the library.
@@ -58,6 +62,13 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      */
     private static final int WANTED_ROWS = 12;
 
+    private static final String PREFS = "winamp";
+    private static final String PREF_ZOOM = "zoom";
+    private static final String PREF_VIS = "visualiser";
+
+    /** Visualiser animation frame. The device is polled far slower; this smooths it. */
+    private static final long VIS_FRAME_MS = 40;
+
     private final Context ctx;
     private final Runnable onQuit;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -81,12 +92,20 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean repeatOn = false;
     private int mainScale = 4, playlistScale = 4;
     private int laidOutW, laidOutH;
+    private int zoom = 0;                   // index into ZoomChooser.LEVELS
+    private boolean visualiserOn = true;
+    private boolean spectrumRunning = false;
+    private boolean visAnimating = false;
     private final String version;
 
     public WinampUi(Context ctx, Runnable onQuit) {
         this.ctx = ctx;
         this.onQuit = onQuit;
         this.version = versionName(ctx);
+        this.zoom = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(PREF_ZOOM, 0);
+        this.visualiserOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_VIS, true);
         // First line in the log, so "which build is actually running?" is never a guess
         // again - the last install silently did not replace the app.
         Logs.i(TAG, "EversoloWinamp " + version + " starting");
@@ -114,6 +133,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setSkin(skin);
         mainWindow.setScale(mainScale);
         mainWindow.setCallbacks(new Transport());
+        mainWindow.setVisualiserOn(visualiserOn);
         root.addView(mainWindow, centred());
 
         playlistWindow = new PlaylistWindowView(ctx);
@@ -121,6 +141,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         playlistWindow.setScale(playlistScale);
         playlistWindow.setGeometry(playlistGeometry());
         playlistWindow.setCallbacks(new PlaylistActions());
+        playlistWindow.setZoom(zoom);
         playlistWindow.setVisibility(View.GONE);
         root.addView(playlistWindow, centred());
 
@@ -129,6 +150,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setScale(playlistScale);
         browserWindow.setGeometry(browserGeometry());
         browserWindow.setCallbacks(new BrowserActions());
+        browserWindow.setZoom(zoom);
         browserWindow.setVisibility(View.GONE);
         root.addView(browserWindow, centred());
 
@@ -149,6 +171,23 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         engine.start();
         refreshPlaylistWindow();
         return root;
+    }
+
+    /** The zoom chooser, from either window. Applies to both, and is remembered. */
+    private void setZoom(int level) {
+        zoom = Math.max(0, Math.min(ZoomChooser.LEVELS.length - 1, level));
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putInt(PREF_ZOOM, zoom).apply();
+        playlistWindow.setZoom(zoom);
+        browserWindow.setZoom(zoom);
+        relayout();
+        Logs.i(TAG, "zoom x" + ZoomChooser.LABELS[zoom] + " -> scale x" + playlistScale);
+    }
+
+    private void relayout() {
+        int w = laidOutW, h = laidOutH;
+        laidOutW = laidOutH = 0;        // force fit() to recompute
+        fit(w, h);
     }
 
     private void fit(int w, int h) {
@@ -187,6 +226,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     public void destroy() {
         marqueeRunning = false;
+        spectrumRunning = false;
+        engine.stopSpectrum();
         playlist.removeListener(this);
         engine.removeListener(this);
         engine.stop();
@@ -236,18 +277,11 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * that still shows WANTED_ROWS wins, so on a bigger screen it simply gets bigger.
      */
     private void computeScales(int w, int h) {
-        mainScale = Math.max(1, Math.min(w / SkinSprites.WINDOW_W, h / SkinSprites.WINDOW_H));
-
-        // Largest scale that still shows WANTED_ROWS. If no scale manages it the screen is
-        // tiny, and x1 - which shows the most rows - is the best on offer.
-        playlistScale = 1;
-        for (int s = mainScale; s >= 1; s--) {
-            if (PlaylistGeometry.BASE_W * s > w) continue;
-            if (PlaylistGeometry.rowsIn(PlaylistGeometry.heightFor(h, s)) >= WANTED_ROWS) {
-                playlistScale = s;
-                break;
-            }
-        }
+        mainScale = WindowScales.main(w, h);
+        // The zoom setting multiplies the natural scale. Whole numbers only - these are
+        // pixel art - so x1.5 of a x4 window means drawing it at x6: same window, bigger
+        // everything, fewer rows.
+        playlistScale = WindowScales.zoomed(w, h, WANTED_ROWS, ZoomChooser.LEVELS[zoom]);
 
         PlaylistGeometry g = playlistGeometry();
         Logs.i(TAG, "screen " + w + "x" + h
@@ -274,6 +308,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setVisibility(browserWin ? View.VISIBLE : View.GONE);
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
+        updateVisualiser();
     }
 
     private void openPlaylist() {
@@ -325,6 +360,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             mainWindow.setVolumePercent(s.maxVolume > 0 ? s.volume * 100 / s.maxVolume : 0);
             mainWindow.setToggles(playlistOpen, false, shuffleOn, repeatOn);
             showQuality(s);
+            updateVisualiser();
             if (s.isPlaying()) startMarquee();
         });
     }
@@ -355,7 +391,16 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     @Override
     public void onPlaylistChanged() {
-        ui.post(this::refreshPlaylistWindow);
+        ui.post(() -> {
+            refreshPlaylistWindow();
+            // The browser marks rows that are already in the playlist, so it has to be told
+            // when the playlist changes - keeping its scroll position, since this usually
+            // happens because the user just pressed ADD and is still looking at the list.
+            Set<String> paths = new HashSet<>();
+            for (Track t : playlist.tracks()) paths.add(t.absolutePath);
+            browser.setPlaylistPaths(paths);
+            if (browserOpen) browser.refresh(true);
+        });
     }
 
     /** Hand the playlist window a fresh set of rows. It knows nothing about Tracks. */
@@ -368,6 +413,48 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                     t.formattedDuration(), t.durationMs));
         }
         playlistWindow.setTracks(rows, playlist.currentIndex());
+    }
+
+    // ---------------------------------------------------------------- visualiser
+
+    /**
+     * The spectrum analyser only runs when it can be seen and there is something to show:
+     * the main window on top, playback going, and the user not having switched it off. It
+     * costs five HTTP requests a second, so it should not run in the background.
+     */
+    private void updateVisualiser() {
+        boolean wanted = visualiserOn && !playlistOpen && !browserOpen
+                && engine.state().isPlaying();
+        if (wanted == spectrumRunning) return;
+        spectrumRunning = wanted;
+        if (wanted) {
+            engine.startSpectrum(bars -> ui.post(() -> mainWindow.setSpectrum(bars)), 19);
+            startVisAnimation();
+        } else {
+            engine.stopSpectrum();
+        }
+    }
+
+    /** Eases the bars between the frames the device gives us, and lets the peaks fall. */
+    private void startVisAnimation() {
+        if (visAnimating) return;
+        visAnimating = true;
+        ui.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (!spectrumRunning) { visAnimating = false; return; }
+                mainWindow.tickVisualiser();
+                ui.postDelayed(this, VIS_FRAME_MS);
+            }
+        }, VIS_FRAME_MS);
+    }
+
+    private void setVisualiser(boolean on) {
+        visualiserOn = on;
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_VIS, on).apply();
+        mainWindow.setVisualiserOn(on);
+        updateVisualiser();
+        Logs.i(TAG, "visualiser " + (on ? "on" : "off"));
     }
 
     private void startMarquee() {
@@ -441,10 +528,24 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onTogglePlaylist() { openPlaylist(); }
 
+        /**
+         * There is no equalizer to open.
+         *
+         * The device's API has no tone control of any kind - no EQ, no filters, nothing -
+         * and this unit reports hasDspSetting=false. A Winamp EQ window here would be ten
+         * sliders wired to nothing, and worse, it would promise the one thing this player
+         * exists to avoid: the whole point is that the signal reaches the DACs untouched.
+         * So the button says so rather than opening a decoration.
+         */
         @Override public void onToggleEqualizer() {
-            // The equalizer window is not built yet; the device has its own EQ.
-            Logs.i(TAG, "EQ button pressed - equalizer window not implemented yet");
-            toast("Equalizer window not built yet");
+            Logs.i(TAG, "EQ button pressed - the device exposes no equalizer");
+            mainWindow.flashTitle("NO EQUALISER - THIS PLAYER STAYS BIT PERFECT");
+        }
+
+        @Override public void onToggleVisualiser() {
+            boolean on = !mainWindow.isVisualiserOn();
+            setVisualiser(on);
+            mainWindow.flashTitle(on ? "ANALYSER ON" : "ANALYSER OFF");
         }
 
         @Override public void onShuffle() {
@@ -540,6 +641,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             playlistWindow.setFocused(true);
             mainWindow.setFocused(false);
         }
+
+        @Override public void onZoom(int level) { setZoom(level); }
     }
 
     // ---------------------------------------------------------------- browser window
@@ -552,23 +655,30 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onAdd(List<Integer> selected) { browser.add(selected); }
         @Override public void onClose() { closeBrowser(); }
         @Override public void onFocused() { }
+        @Override public void onZoom(int level) { setZoom(level); }
     }
 
     /** What the browser model needs from the app: the playlist, and somewhere to shout. */
     private final class BrowserHost implements LibraryBrowser.Host {
+        /**
+         * The message goes on the browser's own bottom bar, not into a Toast: this window
+         * is an overlay drawn above everything, and a Toast behind it is no feedback at
+         * all. The rows also gain their "already added" mark on the next refresh.
+         */
         @Override
         public void onAddTracks(List<Track> tracks, String what) {
-            if (tracks.isEmpty()) { toast("Nothing to add"); return; }
+            if (tracks.isEmpty()) { browserWindow.flash("Nothing to add"); return; }
             playlist.addAll(tracks);
-            toast("Added " + tracks.size() + " track" + (tracks.size() == 1 ? "" : "s"));
+            // Short on purpose: at x2 zoom this line has about a hundred pixels to live in.
+            browserWindow.flash("Added " + tracks.size() + " (" + playlist.size() + " in list)");
         }
 
         @Override public void onImportM3u(File file) { importM3u(file); }
 
         @Override
         public void onRowsChanged(String title, String where,
-                                  List<BrowserWindowView.Row> rows, int tab) {
-            browserWindow.setRows(title, where, rows, tab);
+                                  List<BrowserWindowView.Row> rows, int tab, boolean keepView) {
+            browserWindow.setRows(title, where, rows, tab, keepView);
         }
 
         @Override public void onStatus(String status) { browserWindow.setStatus(status); }

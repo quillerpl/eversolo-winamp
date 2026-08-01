@@ -29,22 +29,33 @@ from bmpdec import decode_bmp                                    # noqa: E402
 SKIN = os.path.join(HERE, "..", "app/src/main/assets/skins/base-2.91.wsz")
 MARKER = (0, 198, 255)
 
-# Title-bar and body pieces, read off the marker columns. The five 25 px title pieces are
+# Title-bar and body pieces, read off the marker columns. The six 25 px title pieces are
 # separated by markers at x = 25, 51, 77, 103 and 129; the borders and the bottom bar by
 # markers at x = 125/126, 138 and 147 in the band below.
+#
+# WHICH piece is which is not obvious from looking, and getting it wrong produces a title
+# bar whose gold lines break every 25 px. The order is settled by --check, which reports
+# where the bar is uniform column-to-column: only x 52-76 (the dark plate the title text
+# sits on) and x 104-128 (the gold bar) repeat seamlessly, so those two are the tiles and
+# the rest are transitions. Read left to right, the row is:
+#
+#   corner | title-left cap | TITLE FILL | title-right cap | TOP FILL | corner
+#
+# which is not the order they are used in - the top fill goes between the corners and the
+# title, and the title fill is tiled to whatever the text needs.
 FRAME = [
     # name,                     x,   y,   w,  h
     ("GEN_TOP_LEFT",             0,   0,  25, 20),
-    ("GEN_TOP_FILL",            26,   0,  25, 20),
-    ("GEN_TITLE_LEFT",          52,   0,  25, 20),
-    ("GEN_TITLE_FILL",          78,   0,  25, 20),
-    ("GEN_TITLE_RIGHT",        104,   0,  25, 20),
+    ("GEN_TITLE_LEFT",          26,   0,  25, 20),
+    ("GEN_TITLE_FILL",          52,   0,  25, 20),
+    ("GEN_TITLE_RIGHT",         78,   0,  25, 20),
+    ("GEN_TOP_FILL",           104,   0,  25, 20),
     ("GEN_TOP_RIGHT",          130,   0,  25, 20),
     ("GEN_TOP_LEFT_INACTIVE",    0,  21,  25, 20),
-    ("GEN_TOP_FILL_INACTIVE",   26,  21,  25, 20),
-    ("GEN_TITLE_LEFT_INACTIVE", 52,  21,  25, 20),
-    ("GEN_TITLE_FILL_INACTIVE", 78,  21,  25, 20),
-    ("GEN_TITLE_RIGHT_INACTIVE",104, 21,  25, 20),
+    ("GEN_TITLE_LEFT_INACTIVE", 26,  21,  25, 20),
+    ("GEN_TITLE_FILL_INACTIVE", 52,  21,  25, 20),
+    ("GEN_TITLE_RIGHT_INACTIVE",78,  21,  25, 20),
+    ("GEN_TOP_FILL_INACTIVE",  104,  21,  25, 20),
     ("GEN_TOP_RIGHT_INACTIVE", 130,  21,  25, 20),
     # The close button lives inside the top-right corner at +14,+3; this is its held state.
     ("GEN_CLOSE_PRESSED",      148,  42,   9,  9),
@@ -113,6 +124,25 @@ def letter_bounds(gen):
 def main():
     gen = load("GEN.BMP")
     letters = letter_bounds(gen)
+
+    if "--check" in sys.argv:
+        # Which columns of the title bar are identical to the one after them? A run of
+        # them is a region that tiles seamlessly; anything else is a transition piece and
+        # will show a seam every 25 px if you repeat it. This is how the pieces above were
+        # identified, and how to re-identify them for a skin that looks wrong.
+        def col(x):
+            return tuple(gen.getpixel((x, y)) for y in range(0, 20))
+        runs, start = [], None
+        for x in range(0, 154):
+            if col(x) == col(x + 1):
+                start = x if start is None else start
+            elif start is not None:
+                runs.append((start, x))
+                start = None
+        print("title bar, seamlessly tileable runs:")
+        for a, b in runs:
+            print(f"  x {a}-{b}  ({b - a + 1} px)")
+        return 0
 
     if "--report" in sys.argv:
         print(f"GEN.BMP {gen.size[0]}x{gen.size[1]}")

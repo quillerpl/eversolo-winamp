@@ -30,6 +30,7 @@ public final class Skin {
     private final Map<String, Bitmap> bitmaps = new HashMap<>();
     private final Map<String, String> texts = new HashMap<>();
     private PleditStyle pledit;
+    private VisColors vis;
     private String name = "(none)";
 
     public String name() { return name; }
@@ -51,6 +52,12 @@ public final class Skin {
     public PleditStyle pledit() {
         if (pledit == null) pledit = PleditStyle.parse(text("pledit.txt"));
         return pledit;
+    }
+
+    /** The visualiser's 24-colour palette, from viscolor.txt. */
+    public VisColors visColors() {
+        if (vis == null) vis = VisColors.parse(text("viscolor.txt"));
+        return vis;
     }
 
     /** Enough to draw the main window? */
