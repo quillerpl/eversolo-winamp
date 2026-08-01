@@ -1,0 +1,32 @@
+# --- build output ---------------------------------------------------------
+player/build/
+player/*/build/
+player/.gradle/
+player/local.properties
+*.apk
+*.aar
+*.class
+
+# --- macOS ----------------------------------------------------------------
+.DS_Store
+
+# --- raw device dumps -----------------------------------------------------
+# Output of probe.py / enumerate.py against one particular unit. They are large,
+# regenerable, and they carry the owner's own library paths and radio stations.
+# Everything worth keeping from them is written up in API_FINDINGS.md.
+probe_results.json
+enumerate_results.json
+playlists_found.json
+state_before.json
+storage_report_v2.txt
+
+# --- Winamp skins ---------------------------------------------------------
+# The classic skin is Nullsoft's artwork and is not redistributed here. Drop any
+# classic .wsz into player/app/src/main/assets/skins/ before building - see the
+# README in that folder.
+*.wsz
+*.wal
+
+# --- python ---------------------------------------------------------------
+__pycache__/
+*.pyc

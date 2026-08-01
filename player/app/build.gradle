@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'org.eversolo.winamp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.eversolo.winamp"
+        minSdk 26
+        // targetSdk 29 + requestLegacyExternalStorage is the combination proven to give
+        // direct file access on this device (ANSWERS_Q1_Q7.md Q1). A sideloaded app has
+        // no Play Store targeting requirement, so this is safe and deliberate.
+        targetSdk 29
+        // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
+        // silently keeps the existing app when the versionCode has not changed - which
+        // looks exactly like "the new code did nothing".
+        versionCode 13
+        versionName "0.13-browser"
+    }
+    buildTypes {
+        debug { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+dependencies {
+    implementation project(':core')
+    implementation project(':library')
+    implementation project(':playback')
+    implementation project(':playlist')
+    implementation project(':skin')
+}

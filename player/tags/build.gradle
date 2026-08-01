@@ -1,0 +1,7 @@
+// Pure Java on purpose: no Android imports, so the tag parsers can be unit-tested
+// on a desktop JVM. There is no debugger on the device - prove things off-device.
+plugins { id 'java-library' }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}

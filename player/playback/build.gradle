@@ -1,0 +1,13 @@
+plugins { id 'com.android.library' }
+android {
+    namespace 'org.eversolo.winamp.playback'
+    compileSdk 34
+    defaultConfig { minSdk 26 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+dependencies {
+    implementation project(':core')
+}

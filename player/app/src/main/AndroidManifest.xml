@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- Used only by the optional log shipper and, from Phase 2, the loopback call
+         to the device's own control API on 127.0.0.1:9529. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- openFile is literally "open this file": it starts playback AND brings the
+         Eversolo's own player to the front, pushing us into the background. This
+         permission lets us pull our task back. Normal permission, granted at install. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
+    <!-- The player draws above other apps: starting a track always brings the stock
+         Eversolo player to the front, and only an overlay can stay visible over it. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application
+        android:label="Eversolo Winamp"
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:icon="@android:drawable/ic_media_play">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="Eversolo Winamp"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".OverlayService"
+            android:exported="false" />
+
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="Log console" />
+    </application>
+</manifest>

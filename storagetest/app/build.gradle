@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.eversolo.storagetest'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.eversolo.storagetest"
+        minSdk 26
+        // Deliberately targeting 29: a sideloaded app has no Play Store targeting
+        // requirement, and Android 11 still honours requestLegacyExternalStorage
+        // for apps targeting <= 29. This is the access route we are testing.
+        targetSdk 29
+        versionCode 2
+        versionName "2.0"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+}
