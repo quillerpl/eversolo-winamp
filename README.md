@@ -117,7 +117,7 @@ running, which is the quickest way to confirm an install took.
 ### Testing, without a device
 
 ```bash
-./player/tools/run-jvm-tests.sh     # 156 assertions on a desktop JVM
+./player/tools/run-jvm-tests.sh     # 173 assertions on a desktop JVM
 ```
 
 It generates real audio fixtures with ffmpeg and compiles only the Android-free sources: the
@@ -132,9 +132,10 @@ the app uses:
 ./player/tools/preview/browser_preview.py
 ```
 
-That has caught four real bugs so far without an install cycle: the wrong skin being
+That has caught five real bugs so far without an install cycle: the wrong skin being
 bundled, the RLE8 decoding problem, buttons one pixel too tall for the frame they sat on,
-and button labels drawn in the skin's green LCD font, which is unreadable on grey.
+button labels drawn in the skin's green LCD font (unreadable on grey), and a title bar
+assembled from the wrong gen.bmp pieces, which broke the gold lines every 25 px.
 
 Sprite coordinates are **generated, never typed** — `tools/gen-sprites.py` derives the main
 and playlist tables from webamp, and `tools/gen-window-sprites.py` measures the generic
