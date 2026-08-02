@@ -610,7 +610,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onSeek(float f) {
             long d = engine.state().durationMs;
-            if (d > 0) engine.seekTo((long) (f * d));
+            if (d <= 0) return;
+            long target = (long) (f * d);
+            // Tell the sequencer first. A backwards drag from the last seconds of a track
+            // is the same shape as repeat-one wrapping, and the device reports the old
+            // position for a poll or two afterwards - which used to skip the track.
+            controller.onSeek(target);
+            engine.seekTo(target);
+            if (spectrum != null) spectrum.syncTo(target);
         }
 
         @Override public void onVolume(int percent) {

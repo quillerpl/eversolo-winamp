@@ -32,6 +32,13 @@ public interface PlaybackEngine {
     /** 0..200 on this device, where 200 is 0 dB / full output - not a percentage. */
     void setVolume(int volume);
 
+    /**
+     * Repeat-one. The sequencer switches this on while it is driving the playlist, because
+     * it is the only thing that stops the device wandering into the next file in the folder
+     * by itself (ANSWERS_Q1_Q7.md Q2).
+     */
+    void setRepeatOne(boolean on);
+
     PlaybackState state();
 
     void start();

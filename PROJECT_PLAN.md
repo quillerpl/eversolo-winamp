@@ -4,6 +4,37 @@
 
 ## STATUS — 2 August 2026 (read this first)
 
+### Fixed 2 Aug: tapping a track played the next one, and so did seeking
+
+Both reports were the same bug, and it was in the handover. The sequencer's wrap detector —
+the safety net for "repeat-one fired because we were late" — had only two position readings
+to work with, and **a deliberate jump looks exactly like a wrap**.
+
+Tap a track while another plays and `engine.play` confirms the start by polling `getState`,
+publishing each reading *to the sequencer* as it arrives. The position falling from the old
+track's three minutes to the new track's zero read as a wrap, so the sequencer advanced —
+superseding the track that had just been tapped, before it was ever heard. Drag the position
+bar back and the same thing happened, one reading later.
+
+Four guards now, and `SequencerTest` pins each one by removing it and failing:
+
+1. `playAt` claims the handover for the duration of the start (it used to *release* it).
+   The confirm loop is allowed 2.5 s, which outlasts the settling window below, so this is
+   the guard that covers a device that stalls.
+2. A wrap must come from **near the end** of the track. That is where a wrap comes from and
+   a seek does not.
+3. Position jumps within **2 s of us moving the playhead** are ours, not the device's. The
+   device reports the old position for a poll or two — the lag visible on the position bar.
+4. The end-of-track handover respects the same window. **This was a second bug the test
+   found:** seek away from the last seconds of a track and the stale reading still said
+   "400 ms left, hand over now".
+
+The sequencer now talks to the `PlaybackEngine` interface rather than the concrete engine,
+which is what decision D4 always said and is what makes a fake engine — one that publishes
+states from inside `play()`, as the real one does — possible at all. **The first version of
+this test passed against the broken code**; it only became a test when the fake started
+doing that.
+
 ### PICK UP HERE — what is untested, in the order worth testing
 
 Install `~/Downloads/EversoloWinamp.apk` (versionCode 19). The title strip reads
@@ -14,11 +45,21 @@ take and the versionCode needs bumping again.
 
 * The playlist window, and the browser window with its ×1 / ×1.5 / ×2 zoom.
 * The marks showing what is already in the playlist, and the ADD message.
+* **The spectrum analyser** — decoded from the file, "works great", a split-second behind,
+  which is fine for something indicative.
 * Everything from phases 0–3: library, transport, playlists.
 
 **Built but never run on hardware — this is the whole to-do list**
 
-1. **The analyser (v0.19), and it is the risky one.** `FileSpectrum` decodes the playing
+1. **The handover fixes (v0.20).** Tap a track in the playlist while another is playing:
+   the tapped one should play. Drag the position bar backwards from near the end: it should
+   stay on the track. Then let a track run out normally, to check the handover still works
+   at all — that is the thing these guards could plausibly have broken.
+2. **The analyser's remaining rough edge:** it is a split second behind, which is the FFT
+   window plus the pacing. `FileSpectrum.FRAME_MS` and the buffering are where to look if it
+   ever matters.
+3. ~~**The analyser (v0.19), and it is the risky one.**~~ *Confirmed working.* Kept for the
+   failure modes, in case a codec-less file turns up: `FileSpectrum` decodes the playing
    file with MediaCodec and runs the FFT in `:dsp`. Three ways it can fail, each with its
    own symptom:
    * `CANNOT DECODE THIS FILE` in the title strip → this firmware's MediaCodec will not
@@ -50,7 +91,7 @@ take and the versionCode needs bumping again.
   waveform-driven visualiser becomes possible after all — that is the one thing worth
   reopening, and only then.
 
-**Build `v0.19-analyser`. Phases 0–3 complete and confirmed on the device. Phase 4: three
+**Build `v0.20-seekfix`. Phases 0–3 complete and confirmed on the device. Phase 4: three
 skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
 The playlist window is confirmed on the device; the browser and the analyser are not yet.**
 

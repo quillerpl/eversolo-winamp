@@ -70,6 +70,13 @@ SRC="$BUILD/sources.txt"
 find "$HERE/tags/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' > "$SRC"
 echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/Track.java\"" >> "$SRC"
 echo "\"$HERE/playlist/src/main/java/org/eversolo/winamp/playlist/Playlist.java\"" >> "$SRC"
+# The sequencer talks to the PlaybackEngine interface (D4), so a fake engine can stand in.
+echo "\"$HERE/playlist/src/main/java/org/eversolo/winamp/playlist/PlaylistController.java\"" >> "$SRC"
+echo "\"$HERE/playback/src/main/java/org/eversolo/winamp/playback/PlaybackEngine.java\"" >> "$SRC"
+echo "\"$HERE/playback/src/main/java/org/eversolo/winamp/playback/PlaybackState.java\"" >> "$SRC"
+echo "\"$HERE/core/src/main/java/org/eversolo/winamp/core/Logs.java\"" >> "$SRC"
+# ...compiled against a stub android.util.Log, so the real logging code ships untouched.
+echo "\"$HERE/tools/jvm-tests/stubs/android/util/Log.java\"" >> "$SRC"
 # The playlist window's geometry and its colour parsing carry no Android imports either.
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/PlaylistGeometry.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/PleditStyle.java\"" >> "$SRC"
@@ -80,14 +87,14 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/SkinSprites.java\"" >>
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >> "$SRC"
 # :dsp is plain Java for exactly this reason - the analyser's maths is provable here.
 find "$HERE/dsp/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' >> "$SRC"
-for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest; do
+for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done
 
 "$JAVAC" -encoding UTF-8 -nowarn -d "$BUILD/classes" @"$SRC"
 
 fail=0
-for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest"; do
+for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest"; do
   set -- $t
   echo; echo "=== $1 ==="
   "$JAVA" -Dfile.encoding=UTF-8 -cp "$BUILD/classes" "$@" || fail=1
