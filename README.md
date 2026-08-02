@@ -39,7 +39,7 @@ in the player's bottom-right corner**:
 > expect it to break the moment Eversolo changes their firmware. If it is useful to you,
 > that is a happy accident — please do not file it under "supported software".
 >
-> What it does try to be is *honest*. Where the hardware cannot do something, the app says
+> Where the hardware cannot do something, the app says
 > so rather than faking it, and the reasoning is written down in `docs/decisions.md`.
 
 > **Status:** in daily use on the author's own DMP-A6. All three windows work, playback and
