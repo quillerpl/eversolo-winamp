@@ -1,6 +1,6 @@
 # Status — what works, what is untested
 
-Current build **v0.23-fullscr** (versionCode 23). With nothing playing, the title strip
+Current build **v0.24-nojump** (versionCode 24). With nothing playing, the title strip
 shows the running version; that is the quickest check that an install took.
 
 ## Working, confirmed on the device
@@ -23,11 +23,9 @@ shows the running version; that is the quickest check that an install took.
    switches tags/file name and should read *song - album - artist*.
 3. **kbps / kHz / mono-stereo** — never confirmed since they were wired up.
 4. **SAVE LIST / LOAD LIST**, which write and read `.m3u` in `EverSoloWinamp/playlists`.
-5. **FULLSCR.** v0.22 was tried on the device and **did nothing** — the side bar stayed. The
-   self-check worked: it reverted cleanly and the player was unharmed. v0.23 adds the second
-   mechanism (`WindowInsetsController`, API 30) alongside the legacy flags, because the
-   legacy ones are computed from the top *application* window and an overlay is not one.
-   It now says what happened in the title strip and ships the log to `DEV_HOST`.
+5. **FULLSCR** — confirmed working on the device in v0.23. `WindowInsetsController` is the
+   mechanism that does it; the legacy flags are inert here. v0.24 stops the window resizing
+   on every touch; that is the part still to confirm.
 
 ## Not built, and why
 

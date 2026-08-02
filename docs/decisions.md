@@ -25,6 +25,14 @@ them.
   size where a row can be tapped. The owner chose this over shrinking everything.
 * **The browser is a browser only**: no transport, and tapping a track does not play it.
 * **Nothing may be reachable only by a gesture.**
+* **The window width is pinned, not left to the system.** `LAYOUT_HIDE_NAVIGATION` is inert
+  on this firmware, so the window resized on every touch and re-scaled the whole UI with it.
+  The measured full width is nailed down instead. See `windows.md`.
+* **The main window cannot fill the screen.** 2160 ÷ 275 = 7.85: ×7 is 1925 px and ×8 is
+  2200 px, 40 px too wide, and the clipped columns are frame artwork rather than margin
+  (checked — the outer columns of `main.bmp` carry 21–38 distinct colours each). Filling the
+  width exactly needs a fractional scale, which rule 6 forbids. The browser already fills
+  2160 and the playlist reaches 2100; it is only the main window that is short.
 * **Full screen is asked for, then verified — never assumed.** The firmware's side bar is
   almost certainly the navigation bar, but "almost certainly" is not shippable to a device
   with no debugger. `FullScreen` requests the hide without the full-bleed layout, watches for

@@ -41,6 +41,7 @@ public class OverlayService extends Service {
     private View overlay;
     private WinampUi playerUi;
     private FullScreen fullScreen;
+    private WindowManager.LayoutParams overlayParams;
 
     public static boolean canDraw(Context ctx) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(ctx);
@@ -91,6 +92,7 @@ public class OverlayService extends Service {
         overlay = host;
 
         fullScreen = new FullScreen(host);
+        fullScreen.setWindowSizer(this::pinOverlayWidth);
         playerUi.attachFullScreen(fullScreen);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -105,6 +107,7 @@ public class OverlayService extends Service {
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.OPAQUE);
         lp.gravity = Gravity.TOP | Gravity.START;
+        overlayParams = lp;
 
         try {
             wm.addView(overlay, lp);
@@ -114,6 +117,34 @@ public class OverlayService extends Service {
             Logs.e(TAG, "could not add overlay window", t);
             LogShipper.shipBuffer();
             stopSelf();
+        }
+    }
+
+    /**
+     * Hold the window at {@code px} wide, or go back to MATCH_PARENT when {@code px} is 0.
+     *
+     * Needed because MATCH_PARENT is resolved against a frame this firmware shrinks whenever
+     * the side bar is showing: the window was going 2160 -> 2000 -> 2160 on every touch, and
+     * the whole Winamp layout was being re-scaled with it. FLAG_LAYOUT_NO_LIMITS goes on at
+     * the same time, because without it the system clips the window back to that same frame.
+     *
+     * The width is one measured on this device, never a guess - see FullScreen.
+     */
+    private void pinOverlayWidth(int px) {
+        if (wm == null || overlay == null || overlayParams == null) return;
+        int wanted = px > 0 ? px : WindowManager.LayoutParams.MATCH_PARENT;
+        if (overlayParams.width == wanted) return;
+        overlayParams.width = wanted;
+        if (px > 0) {
+            overlayParams.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        } else {
+            overlayParams.flags &= ~WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        }
+        try {
+            wm.updateViewLayout(overlay, overlayParams);
+            Logs.i(TAG, "overlay width pinned to " + (px > 0 ? px + "px" : "MATCH_PARENT"));
+        } catch (Throwable t) {
+            Logs.w(TAG, "could not repin the overlay width: " + t);
         }
     }
 

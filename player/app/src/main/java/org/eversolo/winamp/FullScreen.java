@@ -66,9 +66,16 @@ public final class FullScreen {
     /** Somewhere to say what happened, drawn in a window - a Toast would be invisible. */
     public interface Report { void say(String line); }
 
+    /**
+     * Holds the overlay window at a fixed width, or lets it go back to whatever the system
+     * allows. Only the service that added the window can do this, so it is handed in.
+     */
+    public interface WindowSizer { void pinWidth(int px); }
+
     private final View host;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Report report;
+    private WindowSizer sizer;
     private final Runnable hideSoon = this::hideNow;
     private final Runnable giveUp = this::concludeRefused;
 
@@ -93,6 +100,8 @@ public final class FullScreen {
 
     public void setReport(Report r) { this.report = r; }
 
+    public void setWindowSizer(WindowSizer s) { this.sizer = s; }
+
     private void say(String line) { if (report != null) report.say(line); }
 
     public boolean isEnabled() { return enabled; }
@@ -111,6 +120,9 @@ public final class FullScreen {
             refused = false;        // an explicit switch-on always gets a fresh try
             if (barredWidth > 0) begin();
         } else {
+            proven = false;
+            if (sizer != null) sizer.pinWidth(0);
+            requestShow();
             host.setSystemUiVisibility(0);
             Logs.i(TAG, "full screen off; window returns to " + barredWidth + "px");
         }
@@ -191,8 +203,13 @@ public final class FullScreen {
         final int grownTo = width;
         host.post(() -> {
             host.setSystemUiVisibility(LAYOUT_FULL | HIDE);
+            // LAYOUT_HIDE_NAVIGATION is inert on this firmware - the device reports no insets
+            // at all (R0 NAV0) and the window still shrank back to its old width every time
+            // the bar returned, re-scaling the whole UI on every touch. So the width is
+            // nailed down at the size we just measured, and from here only the bar moves.
+            if (sizer != null) sizer.pinWidth(grownTo);
             Logs.i(TAG, "side bar hidden: window " + barredWidth + " -> " + grownTo
-                    + "px, " + diag());
+                    + "px, pinned there, " + diag());
             say("FULLSCREEN ON - " + grownTo + "PX");
             LogShipper.shipBuffer();
         });
@@ -201,6 +218,7 @@ public final class FullScreen {
     private void concludeRefused() {
         if (proven || !enabled) return;
         refused = true;
+        if (sizer != null) sizer.pinWidth(0);
         requestShow();
         host.setSystemUiVisibility(0);
         Logs.w(TAG, "the side bar would not go - window still " + barredWidth + "px after "

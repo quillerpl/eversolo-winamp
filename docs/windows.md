@@ -58,9 +58,18 @@ puts every flag back, says so in the title strip and ships the log.
 
 It asks **twice, by two different mechanisms**. `SYSTEM_UI_FLAG_HIDE_NAVIGATION` is computed
 by the system from the top *application* window, and `TYPE_APPLICATION_OVERLAY` sits well
-above the application range — which is the likeliest reason v0.22 was ignored outright on the
-device. `WindowInsetsController` (API 30, which this device runs) routes through the *focused*
-window instead, and an overlay can be that. Neither is trusted; the window growing is. Once proven, the window stays 2160 px wide even while the
+above the application range. On this device that route is **inert** — the firmware reports no
+insets at all (`R0 NAV0`) and the flags did nothing. `WindowInsetsController` (API 30, which
+this device runs) routes through the *focused* window instead, and an overlay can be that:
+**that is the one that works here.** Neither is trusted; the window growing is.
+
+The same inertness is why the width has to be **pinned**. `LAYOUT_HIDE_NAVIGATION` should keep
+the window full-width while the bar is briefly back, and does not: the window went
+2160 → 2000 → 2160 on every single touch, re-scaling the whole layout each time. So once the
+full width has been measured, `OverlayService.pinOverlayWidth` fixes the window there with
+`FLAG_LAYOUT_NO_LIMITS`, and from then on only the bar moves. The bar draws over the
+right-hand 160 px while it is visible — six pixels of frame on the main window, rather more of
+the playlist's scrollbar. That was chosen over the whole UI jumping. Once proven, the window stays 2160 px wide even while the
 bar is briefly visible — otherwise the whole layout would re-scale twice on every touch.
 
 The main window does not get bigger (×7 either way, 1925 × 812) — it just stops sitting 80 px
