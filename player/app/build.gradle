@@ -1,7 +1,23 @@
 plugins { id 'com.android.application' }
+
+// Release signing, if a key has been set up. keystore.properties and the .jks itself are
+// git-ignored and never leave this machine: whoever holds them is the only person who can
+// publish an update the device will accept over an existing install. Without the file the
+// release build still runs, it just comes out unsigned - see docs/build-install.md.
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
+
 android {
     namespace 'org.eversolo.winamp'
     compileSdk 34
+
+    lint {
+        // targetSdk 29 is deliberate (see below). Lint treats a low targetSdk as a fatal
+        // error because Google Play rejects it - a store rule, not a correctness one, and
+        // this app is sideloaded onto one streamer.
+        disable 'ExpiredTargetSdkVersion'
+    }
 
     defaultConfig {
         applicationId "org.eversolo.winamp"
@@ -13,11 +29,30 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 26
-        versionName "0.26-align"
+        versionCode 27
+        versionName "0.27-skins"
     }
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
+        // The debug build carries a skin in src/debug/assets so it runs straight away on the
+        // owner's own device. The release build deliberately does not: the classic skin is
+        // Nullsoft's artwork and is not ours to redistribute (THIRD-PARTY-NOTICES.md), so a
+        // downloaded build asks for one on first run.
         debug { minifyEnabled false }
+        release {
+            minifyEnabled false
+            if (keystoreFile.exists()) signingConfig signingConfigs.release
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11

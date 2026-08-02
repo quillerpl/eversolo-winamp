@@ -20,7 +20,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+
+import java.io.File;
+import java.util.List;
 
 import org.eversolo.winamp.core.CrashHandler;
 import org.eversolo.winamp.core.LogShipper;
@@ -68,8 +72,13 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (fallbackMode) return;
-        if (hasStorage() && OverlayService.canDraw(this)) launchOverlay();
-        else updateGate();
+        if (!hasStorage() || !OverlayService.canDraw(this)) { updateGate(); return; }
+        // The player draws itself from a Winamp skin and release builds carry none - the
+        // classic one is Nullsoft's artwork, not ours to hand out. Without one there is
+        // literally nothing to draw, so this is the only screen that can be shown, and it
+        // has to be plain Android views rather than the skinned windows.
+        if (new SkinStore(this).load() == null) { buildSkinGate(); return; }
+        launchOverlay();
     }
 
     @Override
@@ -88,6 +97,63 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
         else startService(svc);
         finish();     // the overlay is the interface from here on
+    }
+
+    /**
+     * First run with no skin on the device. Lists any that turn up and explains how to get
+     * one; after that the Winamp logo in the player's bottom-right corner comes back here.
+     */
+    private void buildSkinGate() {
+        SkinStore store = new SkinStore(this);
+        List<File> found = store.findAll();
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundColor(Color.BLACK);
+        box.setPadding(dp(28), dp(24), dp(28), dp(24));
+
+        TextView title = new TextView(this);
+        title.setText("CHOOSE A SKIN");
+        title.setTextColor(0xFF00FF66);
+        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        box.addView(title);
+
+        TextView words = new TextView(this);
+        words.setTextColor(0xFFCCCCCC);
+        words.setTypeface(Typeface.MONOSPACE);
+        words.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        words.setPadding(0, dp(14), 0, dp(16));
+        words.setText(found.isEmpty()
+                ? "This player wears a classic Winamp skin, and it does not come with one -"
+                  + " those are other people's artwork.\n\n"
+                  + "Get a .wsz skin file (there are thousands at skins.webamp.org), put it"
+                  + " on a USB stick or in this folder:\n\n    " + SkinStore.HOME + "\n\n"
+                  + "then tap Look again."
+                : "Tap the one you want. You can change it later from the Winamp logo in the"
+                  + " bottom-right corner of the player.");
+        box.addView(words);
+
+        for (final File f : found) {
+            Button b = new Button(this);
+            b.setText(f.getName() + "\n" + f.getParent());
+            b.setAllCaps(false);
+            b.setOnClickListener(v -> { store.choose(f); launchOverlay(); });
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp.bottomMargin = dp(8);
+            box.addView(b, blp);
+        }
+
+        Button again = new Button(this);
+        again.setText(found.isEmpty() ? "Look again" : "Look again for more");
+        again.setOnClickListener(v -> buildSkinGate());
+        box.addView(again);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
+        setContentView(scroll);
+        Logs.i(TAG, "skin gate shown, " + found.size() + " skin(s) found");
     }
 
     // ------------------------------------------------------------------ gate UI

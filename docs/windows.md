@@ -13,6 +13,13 @@ back. The user chose this over shrinking everything.
 | Main | `MainWindowView` | `main.bmp` + `titlebar.bmp`, fixed 275×116 | `SkinSprites` |
 | Playlist | `PlaylistWindowView` | `pledit.bmp` | `PlaylistGeometry` |
 | Browser | `BrowserWindowView` | `gen.bmp` / `genex.bmp` | `GenGeometry` |
+| Skins | `BrowserWindowView` again | `gen.bmp` / `genex.bmp` | `GenGeometry` |
+
+The skin chooser is a **second instance of the browser window**, not a fourth class. The view
+was already told nothing about what its rows mean, so all it needed was `setChrome` to relabel
+the tabs and the three buttons — SKINS, and CLOSE / RESCAN / OPTIONS. Rows are marked
+`container` so one tap applies a skin rather than selecting it. Everything else — the frame,
+scrolling, hit-testing, the options fly-out — is shared.
 
 ## Sizing
 

@@ -30,3 +30,9 @@ storage_report_v2.txt
 # --- python ---------------------------------------------------------------
 __pycache__/
 *.pyc
+
+# Release signing - never commit these. Losing them means never being able to
+# update an installed app; leaking them means someone else can.
+keystore.properties
+*.jks
+*.keystore

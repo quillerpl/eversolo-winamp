@@ -51,3 +51,17 @@ Getting that wrong stamps a cap every 25 px and breaks the gold lines — it hap
 
 Render it on the desktop first — `testing.md` has the commands. A misplaced piece is obvious
 in a preview and invisible in a diff.
+
+## Where the skin comes from
+
+`SkinStore` owns this. It looks for the chosen skin first, then any `.wsz`/`.zip` in the
+likely folders on **every** volume — `EverSoloWinamp/skins`, `skins`, `Download`, and each
+volume root — then the one bundled in the APK. The chosen path is remembered in prefs, so it
+is a decision rather than whatever `listFiles` returned first.
+
+**Release builds carry no skin.** The classic one is Nullsoft's artwork and is not this
+project's to redistribute, so it lives in `src/debug/assets/skins/` and ships only in the
+owner's own sideloaded build. A downloaded release finds nothing, and `MainActivity` shows a
+plain-Android first-run screen — plain because with no skin there is nothing to draw a skinned
+window with. After that, the **Winamp logo in the main window's bottom-right corner** (hit
+area 247,86 22x22, measured off `main.bmp`) opens the in-player chooser.

@@ -59,6 +59,8 @@ public final class MainWindowView extends View {
         void onToggleTimeMode();
         /** Tapping the song title: the tags or the file name. */
         void onToggleTitleMode();
+        /** Tapping the Winamp logo, bottom right: choose a skin. */
+        void onLogo();
     }
 
     // ---- model ----
@@ -499,6 +501,11 @@ public final class MainWindowView extends View {
             new Hit("time", 36, 24, 62, 17),
             // The song title: tap to see the file name instead.
             new Hit("title", 111, 20, 154, 14),
+            // The lightning-bolt logo in the bottom-right corner. In Winamp it opened the
+            // About box; here it is where you change the skin, which is the nearest thing
+            // this player has to "about Winamp". Measured off main.bmp: the bolt occupies
+            // 249..266 x 88..105, and this is a couple of pixels wider all round for fingers.
+            new Hit("logo", 247, 86, 22, 22),
     };
 
     @Override
@@ -577,6 +584,7 @@ public final class MainWindowView extends View {
             case "vis":    callbacks.onToggleVisualiser(); break;
             case "time":   callbacks.onToggleTimeMode(); break;
             case "title":  callbacks.onToggleTitleMode(); break;
+            case "logo":   callbacks.onLogo(); break;
             case "shuffle": callbacks.onShuffle(); break;
             case "repeat": callbacks.onRepeat(); break;
             case "volume": callbacks.onVolume(volumePercent); break;

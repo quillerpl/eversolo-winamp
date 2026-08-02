@@ -90,12 +90,16 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private MainWindowView mainWindow;
     private PlaylistWindowView playlistWindow;
     private BrowserWindowView browserWindow;
+    private BrowserWindowView skinWindow;
+    private SkinStore skins;
+    private List<File> skinFiles = new ArrayList<>();
     private LibraryBrowser browser;
     private FrameLayout root;
     private FullScreen fullScreen;
 
     private boolean playlistOpen = false;
     private boolean browserOpen = false;
+    private boolean skinsOpen = false;
     private boolean marqueeRunning = false;
     private boolean shuffleOn = false;
     private boolean repeatOn = false;
@@ -190,6 +194,19 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setVisibility(View.GONE);
         root.addView(browserWindow, centred());
 
+        // The skin chooser is the same window wearing different words. Everything that makes
+        // the browser work - the frame, the scrolling, the options fly-out - is identical, so
+        // a second window differing only in its labels would be waste.
+        skinWindow = new BrowserWindowView(ctx);
+        skinWindow.setSkin(skin);
+        skinWindow.setScale(playlistScale);
+        skinWindow.setGeometry(browserGeometry());
+        skinWindow.setChrome(new String[]{"SKINS"}, new String[]{"CLOSE", "RESCAN", "OPTIONS"});
+        skinWindow.setCallbacks(new SkinActions());
+        skinWindow.setZoom(zoom);
+        skinWindow.setVisibility(View.GONE);
+        root.addView(skinWindow, centred());
+
         // The analyser decodes the playing file itself: the device serves no spectrum
         // (isHasSpectrum is false on every source) but the samples are in the file, and we
         // know which file because we asked for it to be played.
@@ -243,8 +260,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         this.fullScreen = fs;
         playlistWindow.setFullScreen(fullScreenOn);
         browserWindow.setFullScreen(fullScreenOn);
+        skinWindow.setFullScreen(fullScreenOn);
         playlistWindow.setOversize(oversizeOn);
         browserWindow.setOversize(oversizeOn);
+        skinWindow.setOversize(oversizeOn);
         fs.setReport(this::report);
         fs.setSpace(this::onUsableWidth);
         fs.setEnabled(fullScreenOn);
@@ -287,6 +306,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 .edit().putBoolean(PREF_OVERSIZE, on).apply();
         playlistWindow.setOversize(on);
         browserWindow.setOversize(on);
+        skinWindow.setOversize(on);
         relayout();
         int crop = WindowScales.cropPerSide(laidOutW, mainScale);
         report("MAIN x" + mainScale + " - " + (crop > 0
@@ -303,6 +323,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 .edit().putBoolean(PREF_FULLSCREEN, on).apply();
         playlistWindow.setFullScreen(on);
         browserWindow.setFullScreen(on);
+        skinWindow.setFullScreen(on);
         if (fullScreen != null) fullScreen.setEnabled(on);
         Logs.i(TAG, "full screen " + (on ? "on" : "off"));
     }
@@ -314,6 +335,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 .edit().putInt(PREF_ZOOM, zoom).apply();
         playlistWindow.setZoom(zoom);
         browserWindow.setZoom(zoom);
+        skinWindow.setZoom(zoom);
         relayout();
         Logs.i(TAG, "zoom x" + ZoomChooser.LABELS[zoom] + " -> scale x" + playlistScale);
     }
@@ -361,11 +383,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         playlistWindow.setGeometry(playlistGeometry());
         browserWindow.setScale(playlistScale);
         browserWindow.setGeometry(browserGeometry());
+        skinWindow.setScale(playlistScale);
+        skinWindow.setGeometry(browserGeometry());
         // Sizing the lists to the usable width is only half of staying clear of the bar:
         // they are centred in the whole window, so they also have to slide over.
         float shift = WindowScales.centreShift(laidOutW, listW);
         playlistWindow.setTranslationX(shift);
         browserWindow.setTranslationX(shift);
+        skinWindow.setTranslationX(shift);
     }
 
     /**
@@ -417,6 +442,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Back closes one layer at a time; from the bare main window the host quits. */
     public boolean handleBack() {
+        if (skinsOpen) {
+            closeSkins();
+            return true;
+        }
         if (browserOpen) {
             if (browser.up()) return true;      // up a folder before leaving the browser
             closeBrowser();
@@ -432,22 +461,67 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     // ---------------------------------------------------------------- skin
 
     private Skin loadSkin() {
-        // A user-supplied .wsz on the device wins; otherwise the bundled classic skin.
-        File userSkins = new File("/storage/emulated/0/EverSoloWinamp/skins");
-        if (userSkins.isDirectory()) {
-            File[] found = userSkins.listFiles();
-            if (found != null) {
-                for (File f : found) {
-                    String n = f.getName().toLowerCase();
-                    if (n.endsWith(".wsz") || n.endsWith(".zip")) {
-                        Skin s = Skin.fromArchive(f);
-                        if (s.isUsable()) return s;
-                        Logs.w(TAG, "skin " + f.getName() + " is not usable, ignoring");
-                    }
-                }
-            }
+        if (skins == null) skins = new SkinStore(ctx);
+        return skins.load();
+    }
+
+    // ---------------------------------------------------------------- the skin chooser
+
+    /** Opened from the Winamp logo in the main window's bottom-right corner. */
+    private void openSkins() {
+        skinsOpen = true;
+        show(false, false, false, true);
+        refreshSkinList(false);
+        Logs.i(TAG, "skin chooser opened");
+    }
+
+    private void closeSkins() {
+        skinsOpen = false;
+        show(!playlistOpen && !browserOpen, playlistOpen, browserOpen, false);
+        Logs.i(TAG, "skin chooser closed");
+    }
+
+    private void refreshSkinList(boolean rescanned) {
+        if (skins == null) skins = new SkinStore(ctx);
+        skinFiles = skins.findAll();
+        File current = skins.chosen();
+        List<BrowserWindowView.Row> rows = new ArrayList<>();
+        for (File f : skinFiles) {
+            boolean inUse = current != null && current.equals(f);
+            // container=true so a single tap fires onOpen and puts the skin on. Choosing a
+            // skin is the sort of thing you want to see happen, not confirm.
+            rows.add(new BrowserWindowView.Row(
+                    f.getName(), f.getParentFile() == null ? "" : f.getParentFile().getName(),
+                    true, inUse ? BrowserWindowView.ALL_ADDED : BrowserWindowView.NOT_ADDED));
         }
-        return Skin.fromAssetArchive(ctx, "skins/base-2.91.wsz");
+        skinWindow.setRows("CHOOSE A SKIN", skinFiles.size() + " found", rows, 0, false);
+        if (skinFiles.isEmpty()) {
+            skinWindow.setStatus("No skins found. Put a .wsz in " + SkinStore.HOME
+                    + " or on a USB stick, then RESCAN.");
+        } else if (rescanned) {
+            skinWindow.flash("Found " + skinFiles.size());
+        }
+    }
+
+    /** Apply a skin now, to every window, and remember it. */
+    private void useSkin(int index) {
+        if (index < 0 || index >= skinFiles.size()) return;
+        File f = skinFiles.get(index);
+        Skin s = Skin.fromArchive(f);
+        if (s == null || !s.isUsable()) {
+            skinWindow.flash("That file is not a usable skin");
+            Logs.w(TAG, "rejected skin " + f);
+            return;
+        }
+        skins.choose(f);
+        mainWindow.setSkin(s);
+        playlistWindow.setSkin(s);
+        browserWindow.setSkin(s);
+        skinWindow.setSkin(s);
+        relayout();
+        refreshSkinList(false);
+        skinWindow.flash("Using " + f.getName());
+        Logs.i(TAG, "skin applied: " + f);
     }
 
     /**
@@ -488,10 +562,11 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     // ---------------------------------------------------------------- windows
 
     /** Only one window is up at a time: there is no room for two at a readable size. */
-    private void show(boolean main, boolean playlistWin, boolean browserWin) {
+    private void show(boolean main, boolean playlistWin, boolean browserWin, boolean skinWin) {
         mainWindow.setVisibility(main ? View.VISIBLE : View.GONE);
         playlistWindow.setVisibility(playlistWin ? View.VISIBLE : View.GONE);
         browserWindow.setVisibility(browserWin ? View.VISIBLE : View.GONE);
+        skinWindow.setVisibility(skinWin ? View.VISIBLE : View.GONE);
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
         updateVisualiser();
@@ -501,7 +576,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private void openPlaylist() {
         playlistOpen = true;
         browserOpen = false;
-        show(false, true, false);
+        show(false, true, false, false);
         mainWindow.setToggles(true, false, shuffleOn, repeatOn);
         library.startScanIfNeeded();        // so ADD FILE is ready when they reach for it
         refreshPlaylistWindow();
@@ -510,14 +585,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     private void closePlaylist() {
         playlistOpen = false;
-        show(true, false, false);
+        show(true, false, false, false);
         mainWindow.setToggles(false, false, shuffleOn, repeatOn);
         Logs.i(TAG, "playlist window closed");
     }
 
     private void openBrowser(int tab) {
         browserOpen = true;
-        show(false, false, true);
+        show(false, false, true, false);
         library.startScanIfNeeded();
         browser.openTab(tab);
         Logs.i(TAG, "library browser opened on tab " + tab);
@@ -526,7 +601,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     /** Back to whichever window sent us here. */
     private void closeBrowser() {
         browserOpen = false;
-        show(!playlistOpen, playlistOpen, false);
+        show(!playlistOpen, playlistOpen, false, false);
         refreshPlaylistWindow();
         Logs.i(TAG, "library browser closed");
     }
@@ -648,7 +723,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * when we know the path - getState does not report one.
      */
     private void updateVisualiser() {
-        boolean wanted = visualiserOn && !playlistOpen && !browserOpen
+        boolean wanted = visualiserOn && !playlistOpen && !browserOpen && !skinsOpen
                 && engine.state().isPlaying();
         Track playing = playlist.current();
 
@@ -800,6 +875,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             Logs.i(TAG, "clock shows " + (remaining ? "time remaining" : "time elapsed"));
         }
 
+        @Override public void onLogo() { openSkins(); }
+
         @Override public void onToggleTitleMode() {
             showFileName = !showFileName;
             mainWindow.setNowPlaying(nowPlayingText(engine.state()),
@@ -936,6 +1013,19 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
 
+        @Override public void onOversize(boolean on) { setOversize(on); }
+    }
+
+    /** The same window as the browser, pointed at skin files instead of music. */
+    private final class SkinActions implements BrowserWindowView.Callbacks {
+        @Override public void onOpen(int index) { useSkin(index); }
+        @Override public void onUp() { }
+        @Override public void onTab(int tab) { }
+        @Override public void onAdd(List<Integer> selected) { refreshSkinList(true); }
+        @Override public void onClose() { closeSkins(); }
+        @Override public void onFocused() { }
+        @Override public void onZoom(int level) { setZoom(level); }
+        @Override public void onFullScreen(boolean on) { setFullScreen(on); }
         @Override public void onOversize(boolean on) { setOversize(on); }
     }
 

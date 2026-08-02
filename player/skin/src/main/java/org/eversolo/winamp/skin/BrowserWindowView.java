@@ -78,9 +78,19 @@ public final class BrowserWindowView extends View {
         }
     }
 
-    private static final String[] TABS = {"ARTIST", "ALBUM", "FOLDER", "M3U"};
+    /**
+     * The labels around the list, not the list itself. Configurable because this window is
+     * used twice: once for music and once for choosing a skin. Everything else - the frame,
+     * the scrolling, the hit-testing, the options fly-out - is the same either way, so it
+     * would be waste to write a second window that differs only in six words.
+     */
+    private static final String[] MUSIC_TABS = {"ARTIST", "ALBUM", "FOLDER", "M3U"};
+    private static final String[] MUSIC_BUTTONS = {"DONE", "ADD", "OPTIONS"};
+
+    private String[] tabs = MUSIC_TABS;
+    private String[] buttons = MUSIC_BUTTONS;
     /** Bottom row, right to left. */
-    private static final String[] BUTTONS = {"DONE", "ADD", "OPTIONS"};
+
     /** Space down the left of every row for the "already added" mark. */
     private static final int MARK_GUTTER = 8;
 
@@ -140,6 +150,17 @@ public final class BrowserWindowView extends View {
     public void setGeometry(GenGeometry g) { this.geo = g; requestLayout(); invalidate(); }
 
     public void setCallbacks(Callbacks c) { this.callbacks = c; }
+
+    /**
+     * Relabel the tabs and the three bottom buttons. Pass null for the Winamp-ish defaults.
+     * A tab array of one entry is drawn as a single heading rather than a row of choices.
+     */
+    public void setChrome(String[] tabLabels, String[] buttonLabels) {
+        this.tabs = (tabLabels == null || tabLabels.length == 0) ? MUSIC_TABS : tabLabels;
+        this.buttons = (buttonLabels == null || buttonLabels.length != 3)
+                ? MUSIC_BUTTONS : buttonLabels;
+        invalidate();
+    }
 
     /**
      * Replace the list.
@@ -290,11 +311,11 @@ public final class BrowserWindowView extends View {
     }
 
     private void drawTabs(Canvas c) {
-        for (int i = 0; i < TABS.length; i++) {
+        for (int i = 0; i < tabs.length; i++) {
             PlaylistGeometry.Box b = geo.tab(i);
             boolean on = i == tab || ("tab" + i).equals(pressed);
             sprite(c, on ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON", b.x, b.y);
-            buttonLabel(c, TABS[i], b);
+            buttonLabel(c, tabs[i], b);
         }
     }
 
@@ -383,11 +404,11 @@ public final class BrowserWindowView extends View {
     }
 
     private void drawBottomButtons(Canvas c) {
-        for (int i = 0; i < BUTTONS.length; i++) {
+        for (int i = 0; i < buttons.length; i++) {
             PlaylistGeometry.Box b = geo.bottomButton(i);
-            boolean held = BUTTONS[i].toLowerCase(java.util.Locale.UK).equals(pressed);
+            boolean held = buttons[i].toLowerCase(java.util.Locale.UK).equals(pressed);
             sprite(c, held ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON", b.x, b.y);
-            buttonLabel(c, BUTTONS[i], b);
+            buttonLabel(c, buttons[i], b);
         }
         zoom.draw(c, skin, blit, text, geo.bottomButton(2), zoomPressed);
 
@@ -486,12 +507,12 @@ public final class BrowserWindowView extends View {
         }
 
         if (geo.closeButton().contains(x, y)) { pressed = "close"; invalidate(); return true; }
-        for (int i = 0; i < TABS.length; i++) {
+        for (int i = 0; i < tabs.length; i++) {
             if (geo.tab(i).contains(x, y)) { pressed = "tab" + i; invalidate(); return true; }
         }
-        for (int i = 0; i < BUTTONS.length; i++) {
+        for (int i = 0; i < buttons.length; i++) {
             if (geo.bottomButton(i).contains(x, y)) {
-                pressed = BUTTONS[i].toLowerCase(java.util.Locale.UK);
+                pressed = buttons[i].toLowerCase(java.util.Locale.UK);
                 invalidate();
                 return true;
             }
