@@ -1,6 +1,6 @@
 # Status — what works, what is untested
 
-Current build **v0.21-fullscr** (versionCode 21). With nothing playing, the title strip
+Current build **v0.22-fullscr** (versionCode 22). With nothing playing, the title strip
 shows the running version; that is the quickest check that an install took.
 
 ## Working, confirmed on the device

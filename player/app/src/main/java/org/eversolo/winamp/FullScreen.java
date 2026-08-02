@@ -129,13 +129,18 @@ public final class FullScreen {
                 + barredWidth + "px wide, insets " + insets());
     }
 
+    /**
+     * Every change here is posted rather than done inline. Asking for system-bar flags starts
+     * a fresh window relayout, and this runs <em>from inside</em> a layout pass - the same
+     * trap WinampUi already posts its way around when it resizes the windows.
+     */
     private void onLaidOut(int width) {
         if (width <= 0) return;
 
         if (barredWidth == 0) {
             barredWidth = width;
             Logs.i(TAG, "window with the side bar in place: " + width + "px, insets " + insets());
-            if (enabled) begin();
+            if (enabled) host.post(this::begin);
             return;
         }
 
@@ -146,9 +151,12 @@ public final class FullScreen {
         // the space even while the bar is briefly back.
         proven = true;
         ui.removeCallbacks(giveUp);
-        host.setSystemUiVisibility(LAYOUT_FULL | HIDE);
-        Logs.i(TAG, "side bar hidden: window " + barredWidth + " -> " + width
-                + "px, insets " + insets());
+        final int grownTo = width;
+        host.post(() -> {
+            host.setSystemUiVisibility(LAYOUT_FULL | HIDE);
+            Logs.i(TAG, "side bar hidden: window " + barredWidth + " -> " + grownTo
+                    + "px, insets " + insets());
+        });
     }
 
     private void concludeRefused() {
