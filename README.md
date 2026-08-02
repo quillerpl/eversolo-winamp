@@ -13,6 +13,35 @@ device's local HTTP API, which bypasses Android's sample-rate conversion and rea
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
 
+## Download and install
+
+**[Download the latest version](https://github.com/quillerpl/eversolo-winamp/releases/latest)**
+
+Every version, with notes on what changed, is on the
+[Releases page](https://github.com/quillerpl/eversolo-winamp/releases).
+
+You do not need a cable, a special program, or developer mode. The Eversolo has an installer
+built into it that you use from an ordinary web browser.
+
+1. **Download the `.apk` file** from the link above, onto a computer that is on the same
+   wi-fi as the streamer.
+2. **Find the streamer's address.** It looks like `192.168.1.207` and it is in the Eversolo's
+   own settings, under network.
+3. **In your browser, go to `http://` that address `:18888`** — so for the example above,
+   `http://192.168.1.207:18888`. A page appears asking for a file. Choose the `.apk` you
+   downloaded. It uploads and installs itself.
+4. **On the streamer, open "Eversolo Winamp".** It is in the apps list.
+5. **Say yes to "display over other apps."** The app explains why and shows a button that
+   takes you straight to the switch. Turn it on and come back.
+6. **Give it a skin** — it does not come with one, and the app will ask. See
+   [Getting a skin](#getting-a-skin) just below.
+
+To update later, download the newer `.apk` and upload it exactly the same way.
+
+**A phone or tablet will not work for step 3** — the Eversolo's upload page needs a real
+desktop browser. If you have no computer to hand, copy the `.apk` onto a USB stick and open
+it with the Eversolo's own File app instead.
+
 ## Tested on
 
 An **Eversolo DMP-A6**, `rockchip DMP-A6`, Android 11 (API 30), firmware **v1.5.90**, on its
@@ -148,18 +177,26 @@ Android Studio's JDK 21, Gradle 8.13, AGP 8.12.1, `compileSdk 34`, `targetSdk 29
 file access on this firmware; a sideloaded app has no Play Store targeting requirement).
 
 ```bash
-# 1. put a classic Winamp .wsz in player/app/src/main/assets/skins/  (see the README there)
-# 2. point Gradle at your SDK
+# 1. point Gradle at your SDK
 echo "sdk.dir=$HOME/Library/Android/sdk" > player/local.properties
-# 3. build
-cd player && ./gradlew assembleDebug
+# 2. build
+cd player && ./gradlew assembleDebug        # for yourself: bundles the skin below
+cd player && ./gradlew assembleRelease      # for other people: no skin, needs a signing key
 ```
+
+**The debug build bundles a skin, the release build does not.** Drop a `.wsz` into
+`player/app/src/debug/assets/skins/` and `assembleDebug` will carry it, so the app runs the
+moment it lands on your own device. `assembleRelease` deliberately ships without one — see
+`THIRD-PARTY-NOTICES.md` — and asks the user for a skin on first run.
+
+Release signing reads `player/keystore.properties`, which is git-ignored. Without it the
+release build still runs; it just comes out unsigned.
 
 **Bump `versionCode` in `player/app/build.gradle` before every build you intend to
 install.** With an unchanged versionCode the device's installer reports success and quietly
 keeps the app it already has, which looks exactly like the new code doing nothing.
 
-### Installing
+### Installing a build you made yourself
 
 There is no ADB, so builds go on through the device's own web installer: open
 `http://<device>:18888` in a **real desktop browser** and choose the APK. Driving that
@@ -172,7 +209,7 @@ running, which is the quickest way to confirm an install took.
 ### Testing, without a device
 
 ```bash
-./player/tools/run-jvm-tests.sh     # 195 assertions on a desktop JVM
+./player/tools/run-jvm-tests.sh     # 254 assertions on a desktop JVM
 ```
 
 It generates real audio fixtures with ffmpeg and compiles only the Android-free sources: the
