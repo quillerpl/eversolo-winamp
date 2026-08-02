@@ -75,11 +75,24 @@ bar is briefly visible — otherwise the whole layout would re-scale twice on ev
 The main window does not get bigger (×7 either way, 1925 × 812) — it just stops sitting 80 px
 left of the screen's real centre. The playlist goes 2000 → 2100 px and the browser fills 2160.
 
-**MAIN x8** is the switch above it, and it is a question rather than a feature. 2160 ÷ 275 =
+**MAIN x8** only does anything while full screen is actually working — at 2000 px wide it
+would crop 100 px off each side, which answers nothing. It is a question rather than a
+feature. 2160 ÷ 275 =
 7.85, so the main window is stuck at ×7 with 117 px of black each side, and ×8 is 2200 px —
 40 px too wide. The switch draws it at ×8 anyway and lets the screen crop 20 px off each edge,
-so the cost can be looked at rather than argued about. It reports what it lost. If the owner
-does not like it, the switch and `WindowScales.mainOversized` come out together.
+so the cost can be looked at rather than argued about. It reports what it lost, and it is nudged one skin pixel left, because the two edges of
+`main.bmp` are not the same drawing and an even crop does not read as even. If the owner does
+not like it, the switch and `WindowScales.mainOversized` come out together.
+
+**The two windows behave differently on purpose.** The main window takes the whole pinned
+width and lets the bar float over its edge — you are not touching the screen while music
+plays, so the bar is almost never up. The playlist and browser do the opposite: they are laid
+out inside whatever is *not* under the bar, because you touch constantly while you are in a
+list, so the bar is up nearly the whole time and being sat on would be the normal case.
+Keeping them clear takes two things, and the second is easy to forget: size them to the usable
+width **and** slide them over — a 2000 px list centred in a 2160 px window still runs to 2080,
+and the bar starts at 2000. `WindowScales.centreShift` is that slide, and the JVM suite checks
+the right-hand edge lands clear at every zoom.
 
 ## Feedback
 

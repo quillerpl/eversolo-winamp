@@ -252,6 +252,29 @@ public class PlaylistGeometryTest {
         check("refuses a step that would overflow vertically",
                 WindowScales.mainOversized(4000, 1080), WindowScales.main(4000, 1080));
 
+        System.out.println("\n=== the lists keep out from under the side bar ===");
+        // Full screen pins the window at 2160, but the bar still covers 2000..2160 whenever
+        // it is showing. The lists are sized to 2000 AND slid left; sizing alone is not
+        // enough, because a 2000px window centred in 2160 still runs to 2080.
+        final int FULL = 2160, USABLE = 2000;
+        check("slide is half the bar", WindowScales.centreShift(FULL, USABLE), -80);
+        check("no slide when the bar is gone", WindowScales.centreShift(FULL, FULL), 0);
+        for (float z : new float[]{1f, 1.5f, 2f}) {
+            int s3 = WindowScales.zoomed(USABLE, SH, WANTED, z);
+            int pw = PlaylistGeometry.widthFor(USABLE, s3) * s3;
+            int left = (FULL - pw) / 2 + WindowScales.centreShift(FULL, USABLE);
+            check("x" + z + ": playlist right edge clears the bar (" + (left + pw) + ")",
+                    left >= 0 && left + pw <= USABLE, true);
+            int bw = (USABLE / s3) * s3;
+            int bleft = (FULL - bw) / 2 + WindowScales.centreShift(FULL, USABLE);
+            check("x" + z + ": browser right edge clears the bar (" + (bleft + bw) + ")",
+                    bleft >= 0 && bleft + bw <= USABLE, true);
+        }
+        // And the bug this is here to catch: sizing without sliding is not enough.
+        int naive = (FULL - PlaylistGeometry.widthFor(USABLE, 6) * 6) / 2
+                + PlaylistGeometry.widthFor(USABLE, 6) * 6;
+        check("without the slide it would still be covered", naive > USABLE, true);
+
         System.out.println("\n=== shared list arithmetic ===");
         check("nothing to scroll", ListMath.maxOffset(5, 15), 0);
         check("clamp below zero", ListMath.clampOffset(-3, 40, 15), 0);

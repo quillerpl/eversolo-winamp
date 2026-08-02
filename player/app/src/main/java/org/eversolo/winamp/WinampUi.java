@@ -101,6 +101,15 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean repeatOn = false;
     private int mainScale = 4, playlistScale = 4;
     private int laidOutW, laidOutH;
+    /**
+     * The width the two list windows may use. The same as the window when the side bar is
+     * hidden, and 160 px narrower while it is showing - the lists shrink out from under it
+     * rather than being covered, because you are touching the screen the whole time you are
+     * in one, which is exactly when the bar is up.
+     */
+    private int listW;
+    private boolean fullScreenActive;
+    private String appliedLayout = "";
     private int zoom = 0;                   // index into ZoomChooser.LEVELS
     private boolean visualiserOn = true;
     private boolean showFileName = false;
@@ -149,8 +158,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         Skin skin = loadSkin();
         // A first guess, so the first frame is sane; the real size arrives at layout time.
-        computeScales(ctx.getResources().getDisplayMetrics().widthPixels,
-                ctx.getResources().getDisplayMetrics().heightPixels);
+        laidOutW = ctx.getResources().getDisplayMetrics().widthPixels;
+        laidOutH = ctx.getResources().getDisplayMetrics().heightPixels;
+        listW = laidOutW;
+        computeScales();
 
         mainWindow = new MainWindowView(ctx);
         mainWindow.setSkin(skin);
@@ -235,6 +246,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         playlistWindow.setOversize(oversizeOn);
         browserWindow.setOversize(oversizeOn);
         fs.setReport(this::report);
+        fs.setSpace(this::onUsableWidth);
         fs.setEnabled(fullScreenOn);
     }
 
@@ -307,21 +319,64 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     }
 
     private void relayout() {
-        int w = laidOutW, h = laidOutH;
-        laidOutW = laidOutH = 0;        // force fit() to recompute
-        fit(w, h);
+        appliedLayout = "";
+        applyLayout();
     }
 
     private void fit(int w, int h) {
-        if (w <= 0 || h <= 0 || (w == laidOutW && h == laidOutH)) return;
+        if (w <= 0 || h <= 0) return;
         laidOutW = w;
         laidOutH = h;
-        computeScales(w, h);
+        applyLayout();
+    }
+
+    /**
+     * How much room the app really has. Called by {@link FullScreen} as the side bar comes
+     * and goes: the window itself stays pinned so nothing jumps, but the lists are laid out
+     * inside whatever is not currently underneath the bar.
+     */
+    private void onUsableWidth(int usablePx, boolean fsActive) {
+        listW = usablePx;
+        fullScreenActive = fsActive;
+        applyLayout();
+    }
+
+    /**
+     * Everything that depends on the space available, in one place, and skipped entirely
+     * when nothing that matters has changed - this runs on every side-bar transition.
+     */
+    private void applyLayout() {
+        if (laidOutW <= 0 || laidOutH <= 0) return;
+        if (listW <= 0 || listW > laidOutW) listW = laidOutW;
+
+        String key = laidOutW + "x" + laidOutH + " list=" + listW + " fs=" + fullScreenActive
+                + " big=" + oversizeOn + " zoom=" + zoom;
+        if (key.equals(appliedLayout)) return;
+        appliedLayout = key;
+
+        computeScales();
         mainWindow.setScale(mainScale);
+        mainWindow.setTranslationX(mainNudge());
         playlistWindow.setScale(playlistScale);
         playlistWindow.setGeometry(playlistGeometry());
         browserWindow.setScale(playlistScale);
         browserWindow.setGeometry(browserGeometry());
+        // Sizing the lists to the usable width is only half of staying clear of the bar:
+        // they are centred in the whole window, so they also have to slide over.
+        float shift = WindowScales.centreShift(laidOutW, listW);
+        playlistWindow.setTranslationX(shift);
+        browserWindow.setTranslationX(shift);
+    }
+
+    /**
+     * A one-skin-pixel shove to the left, and only when the main window is wider than the
+     * screen. Centring an oversized window crops it evenly in screen pixels, but the two
+     * edges of main.bmp are not the same drawing, so an even crop does not read as even.
+     * The owner looked at it on the device and called it; this is that call.
+     */
+    private float mainNudge() {
+        boolean oversized = SkinSprites.WINDOW_W * mainScale > laidOutW;
+        return oversized ? -mainScale : 0f;
     }
 
     /**
@@ -329,7 +384,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * playlist it can be any size at all, so it simply fills the screen at the same scale.
      */
     private GenGeometry browserGeometry() {
-        int w = laidOutW > 0 ? laidOutW : ctx.getResources().getDisplayMetrics().widthPixels;
+        int w = listW > 0 ? listW : ctx.getResources().getDisplayMetrics().widthPixels;
         int h = laidOutH > 0 ? laidOutH : ctx.getResources().getDisplayMetrics().heightPixels;
         return new GenGeometry(w / playlistScale, h / playlistScale);
     }
@@ -402,15 +457,20 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * other way round: from how many tracks should be readable at once. The largest scale
      * that still shows WANTED_ROWS wins, so on a bigger screen it simply gets bigger.
      */
-    private void computeScales(int w, int h) {
-        mainScale = oversizeOn ? WindowScales.mainOversized(w, h) : WindowScales.main(w, h);
+    private void computeScales() {
+        final int w = laidOutW, h = laidOutH;
+        // The main window takes the whole window and lets the bar float over its edge; the
+        // lists keep out of the bar's way. Oversize is only offered once full screen is
+        // actually working - at 2000px wide, x8 would crop 100px off each side.
+        mainScale = (oversizeOn && fullScreenActive)
+                ? WindowScales.mainOversized(w, h) : WindowScales.main(w, h);
         // The zoom setting multiplies the natural scale. Whole numbers only - these are
         // pixel art - so x1.5 of a x4 window means drawing it at x6: same window, bigger
         // everything, fewer rows.
-        playlistScale = WindowScales.zoomed(w, h, WANTED_ROWS, ZoomChooser.LEVELS[zoom]);
+        playlistScale = WindowScales.zoomed(listW, h, WANTED_ROWS, ZoomChooser.LEVELS[zoom]);
 
         PlaylistGeometry g = playlistGeometry();
-        Logs.i(TAG, "screen " + w + "x" + h
+        Logs.i(TAG, "screen " + w + "x" + h + " (lists " + listW + ")"
                 + " -> main x" + mainScale + " (" + SkinSprites.WINDOW_W * mainScale
                 + "x" + SkinSprites.WINDOW_H * mainScale + "), playlist x" + playlistScale
                 + " (" + g.width * playlistScale + "x" + g.height * playlistScale
@@ -419,7 +479,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     }
 
     private PlaylistGeometry playlistGeometry() {
-        int w = laidOutW > 0 ? laidOutW : ctx.getResources().getDisplayMetrics().widthPixels;
+        int w = listW > 0 ? listW : ctx.getResources().getDisplayMetrics().widthPixels;
         int h = laidOutH > 0 ? laidOutH : ctx.getResources().getDisplayMetrics().heightPixels;
         return new PlaylistGeometry(PlaylistGeometry.widthFor(w, playlistScale),
                 PlaylistGeometry.heightFor(h, playlistScale));

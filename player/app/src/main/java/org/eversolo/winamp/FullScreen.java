@@ -72,15 +72,26 @@ public final class FullScreen {
      */
     public interface WindowSizer { void pinWidth(int px); }
 
+    /**
+     * Told how much width is genuinely usable as the bar comes and goes. The window is pinned
+     * so it never resizes, but the bar still <em>covers</em> its right-hand edge while it is
+     * showing, and the lists would rather move out of the way than be sat on.
+     */
+    public interface Space { void onUsableWidth(int usablePx, boolean fullScreenActive); }
+
     private final View host;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Report report;
     private WindowSizer sizer;
+    private Space space;
     private final Runnable hideSoon = this::hideNow;
     private final Runnable giveUp = this::concludeRefused;
 
     /** The window's width with the bar in place - measured, never assumed. */
     private int barredWidth;
+
+    /** And with it gone. Also measured. */
+    private int provenWidth;
 
     private boolean enabled;
     private boolean proven;      // the bar demonstrably goes away on this firmware
@@ -102,6 +113,19 @@ public final class FullScreen {
 
     public void setWindowSizer(WindowSizer s) { this.sizer = s; }
 
+    public void setSpace(Space s) { this.space = s; }
+
+    /** The window width less the bar, when the bar is up and we know how wide it is. */
+    private void publishSpace(boolean barShowing) {
+        if (space == null) return;
+        int usable = (barShowing && barredWidth > 0) ? barredWidth : pinnedWidth();
+        space.onUsableWidth(usable, proven && !refused);
+    }
+
+    private int pinnedWidth() {
+        return provenWidth > 0 ? provenWidth : (barredWidth > 0 ? barredWidth : host.getWidth());
+    }
+
     private void say(String line) { if (report != null) report.say(line); }
 
     public boolean isEnabled() { return enabled; }
@@ -121,8 +145,10 @@ public final class FullScreen {
             if (barredWidth > 0) begin();
         } else {
             proven = false;
+            provenWidth = 0;
             if (sizer != null) sizer.pinWidth(0);
             requestShow();
+            publishSpace(true);
             host.setSystemUiVisibility(0);
             Logs.i(TAG, "full screen off; window returns to " + barredWidth + "px");
         }
@@ -131,7 +157,7 @@ public final class FullScreen {
     /** Called for every touch that reaches the player. Brings the bar back immediately. */
     public void onUserTouch() {
         if (!enabled || refused) return;
-        if (proven) requestShow();
+        if (proven) { requestShow(); publishSpace(true); }
         restartIdleTimer();
     }
 
@@ -199,6 +225,7 @@ public final class FullScreen {
         // It grew. The bar is gone and the space is ours, so now it is safe to ask to keep
         // the space even while the bar is briefly back.
         proven = true;
+        provenWidth = width;
         ui.removeCallbacks(giveUp);
         final int grownTo = width;
         host.post(() -> {
@@ -208,6 +235,7 @@ public final class FullScreen {
             // the bar returned, re-scaling the whole UI on every touch. So the width is
             // nailed down at the size we just measured, and from here only the bar moves.
             if (sizer != null) sizer.pinWidth(grownTo);
+            publishSpace(false);
             Logs.i(TAG, "side bar hidden: window " + barredWidth + " -> " + grownTo
                     + "px, pinned there, " + diag());
             say("FULLSCREEN ON - " + grownTo + "PX");
@@ -218,8 +246,10 @@ public final class FullScreen {
     private void concludeRefused() {
         if (proven || !enabled) return;
         refused = true;
+        provenWidth = 0;
         if (sizer != null) sizer.pinWidth(0);
         requestShow();
+        publishSpace(true);
         host.setSystemUiVisibility(0);
         Logs.w(TAG, "the side bar would not go - window still " + barredWidth + "px after "
                 + VERIFY_MS + "ms, " + diag() + "; leaving the player as it was");
@@ -239,6 +269,7 @@ public final class FullScreen {
     private void hideNow() {
         if (!enabled || refused) return;
         requestHide();
+        publishSpace(false);
     }
 
     /**

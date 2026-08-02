@@ -34,6 +34,18 @@ public final class WindowScales {
         return SkinSprites.WINDOW_H * bigger <= screenH ? bigger : fits;
     }
 
+    /**
+     * How far to slide a window that is centred in {@code fullW} so that it ends up centred
+     * in {@code usableW} instead. Negative slides left.
+     *
+     * Needed because keeping the lists narrow is only half of staying out from under the side
+     * bar: a 2000 px playlist centred in a 2160 px window still runs to 2080, and the bar
+     * starts at 2000. This is the other half, and it is the half that was nearly forgotten.
+     */
+    public static int centreShift(int fullW, int usableW) {
+        return (usableW - fullW) / 2;
+    }
+
     /** How much of an oversized main window falls off each side, in screen pixels. */
     public static int cropPerSide(int screenW, int scale) {
         return Math.max(0, (SkinSprites.WINDOW_W * scale - screenW) / 2);
