@@ -13,6 +13,7 @@ import android.os.IBinder;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -39,6 +40,7 @@ public class OverlayService extends Service {
     private WindowManager wm;
     private View overlay;
     private WinampUi playerUi;
+    private FullScreen fullScreen;
 
     public static boolean canDraw(Context ctx) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(ctx);
@@ -64,6 +66,17 @@ public class OverlayService extends Service {
         // both dismiss it, so the device is never left unusable.
         FrameLayout host = new FrameLayout(this) {
             @Override
+            public boolean dispatchTouchEvent(MotionEvent event) {
+                // Every touch, wherever it lands, brings the device's side bar back. Read
+                // here rather than in the windows so that a tap on empty background counts
+                // too - the bar must never be something only a gesture can recover.
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN && fullScreen != null) {
+                    fullScreen.onUserTouch();
+                }
+                return super.dispatchTouchEvent(event);
+            }
+
+            @Override
             public boolean dispatchKeyEvent(KeyEvent event) {
                 if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
                         && event.getAction() == KeyEvent.ACTION_UP) {
@@ -76,6 +89,9 @@ public class OverlayService extends Service {
         };
         host.addView(playerUi.build());
         overlay = host;
+
+        fullScreen = new FullScreen(host);
+        playerUi.attachFullScreen(fullScreen);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -117,6 +133,7 @@ public class OverlayService extends Service {
         } catch (Throwable t) {
             Logs.w(TAG, "removeView failed: " + t);
         }
+        if (fullScreen != null) fullScreen.destroy();
         if (playerUi != null) playerUi.destroy();
         Logs.i(TAG, "overlay stopped");
         super.onDestroy();

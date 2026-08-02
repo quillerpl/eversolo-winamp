@@ -5,12 +5,14 @@
 # Anything that can be proven on a laptop should be proven on a laptop. These cover the
 # parsers and the playlist model, which is where the subtle bugs live.
 #
-# 156 assertions total, all expected to pass:
+# 224 assertions total, all expected to pass:
 #   TagTest               41  FLAC + ID3 tag parsing against real ffmpeg-generated files
 #   M3uTest               17  .m3u parsing: Windows paths, CRLF, BOM, unicode, Latin-1, URLs
 #   PlaylistTest          23  playlist model, incl. index bookkeeping around the playing track
-#   PlaylistGeometryTest  75  window sizing, scrolling, hit-testing and pledit.txt colours
-#                             for both the playlist and the browser windows
+#   PlaylistGeometryTest 105  window sizing, scrolling, hit-testing, pledit.txt colours and
+#                             the MISC OPTS fly-out, for the playlist and browser windows
+#   FftTest               22  the analyser's maths against sine waves of known pitch
+#   SequencerTest         16  the track-to-track handover and the two ways to move the playhead
 #
 # Usage:  ./tools/run-jvm-tests.sh
 set -e
@@ -97,6 +99,6 @@ fail=0
 for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest"; do
   set -- $t
   echo; echo "=== $1 ==="
-  "$JAVA" -Dfile.encoding=UTF-8 -cp "$BUILD/classes" "$@" || fail=1
+  "$JAVA" -Dfile.encoding=UTF-8 -Dplayer.dir="$HERE" -cp "$BUILD/classes" "$@" || fail=1
 done
 exit $fail

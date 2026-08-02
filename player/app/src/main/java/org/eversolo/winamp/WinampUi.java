@@ -66,6 +66,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private static final String PREF_ZOOM = "zoom";
     private static final String PREF_VIS = "visualiser";
     private static final String PREF_REMAINING = "timeRemaining";
+    private static final String PREF_FULLSCREEN = "fullScreen";
 
     /** Visualiser animation frame. The device is polled slower; this smooths between. */
     private static final long VIS_FRAME_MS = 40;
@@ -87,6 +88,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private BrowserWindowView browserWindow;
     private LibraryBrowser browser;
     private FrameLayout root;
+    private FullScreen fullScreen;
 
     private boolean playlistOpen = false;
     private boolean browserOpen = false;
@@ -102,6 +104,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private volatile String spectrumProblem;
     private boolean visAnimating = false;
     private boolean restoredPlaylist = false;
+    private boolean fullScreenOn = false;
     private final Runnable savePlaylist = new Runnable() {
         @Override public void run() { if (store != null) store.save(playlist); }
     };
@@ -115,6 +118,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 .getInt(PREF_ZOOM, 0);
         this.visualiserOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getBoolean(PREF_VIS, true);
+        this.fullScreenOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_FULLSCREEN, false);
         // First line in the log, so "which build is actually running?" is never a guess
         // again - the last install silently did not replace the app.
         Logs.i(TAG, "EversoloWinamp " + version + " starting");
@@ -208,6 +213,28 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         engine.start();
         refreshPlaylistWindow();
         return root;
+    }
+
+    /**
+     * Handed the overlay's full-screen controller once the window exists. Both scrolling
+     * windows show the switch, so both are told where it currently stands.
+     */
+    public void attachFullScreen(FullScreen fs) {
+        this.fullScreen = fs;
+        playlistWindow.setFullScreen(fullScreenOn);
+        browserWindow.setFullScreen(fullScreenOn);
+        fs.setEnabled(fullScreenOn);
+    }
+
+    /** FULLSCR, from either window. Applies to both, and is remembered. */
+    private void setFullScreen(boolean on) {
+        fullScreenOn = on;
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_FULLSCREEN, on).apply();
+        playlistWindow.setFullScreen(on);
+        browserWindow.setFullScreen(on);
+        if (fullScreen != null) fullScreen.setEnabled(on);
+        Logs.i(TAG, "full screen " + (on ? "on" : "off"));
     }
 
     /** The zoom chooser, from either window. Applies to both, and is remembered. */
@@ -770,6 +797,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         }
 
         @Override public void onZoom(int level) { setZoom(level); }
+
+        @Override public void onFullScreen(boolean on) { setFullScreen(on); }
     }
 
     // ---------------------------------------------------------------- browser window
@@ -783,6 +812,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onClose() { closeBrowser(); }
         @Override public void onFocused() { }
         @Override public void onZoom(int level) { setZoom(level); }
+
+        @Override public void onFullScreen(boolean on) { setFullScreen(on); }
     }
 
     /** What the browser model needs from the app: the playlist, and somewhere to shout. */

@@ -7,7 +7,7 @@ bug that reaches it costs ten minutes, while the same bug caught here costs seco
 ## The JVM suite
 
 ```bash
-./player/tools/run-jvm-tests.sh          # 209 assertions
+./player/tools/run-jvm-tests.sh          # 224 assertions
 ```
 
 It generates real audio fixtures with ffmpeg (testing parsers against files we synthesised
@@ -19,7 +19,7 @@ sources, and runs them on a desktop JVM.
 | `TagTest` | FLAC and ID3 parsing against real ffmpeg-generated files |
 | `M3uTest` | `.m3u` parsing: Windows paths, CRLF, BOM, unicode, Latin-1, URLs |
 | `PlaylistTest` | The playlist model, including index bookkeeping around the playing track |
-| `PlaylistGeometryTest` | Window sizing, scrolling, hit-testing, zoom, `pledit.txt` colours |
+| `PlaylistGeometryTest` | Window sizing, scrolling, hit-testing, zoom, `pledit.txt` colours, and that the MISC OPTS fly-out fits at 2000 **and** 2160 px |
 | `FftTest` | The analyser's maths, against sine waves of known pitch |
 | `SequencerTest` | The handover, and the two ways a user moves the playhead |
 

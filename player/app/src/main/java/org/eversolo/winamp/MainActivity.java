@@ -15,6 +15,7 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -45,6 +46,7 @@ public class MainActivity extends Activity {
     private LinearLayout gate;
     private TextView explain;
     private WinampUi inlineUi;      // only used in fallback mode
+    private FullScreen inlineFullScreen;
     private boolean fallbackMode = false;
 
     @Override
@@ -168,8 +170,23 @@ public class MainActivity extends Activity {
         fallbackMode = true;
         Logs.i(TAG, "running inline (no overlay)");
         inlineUi = new WinampUi(this, this::finish);
-        setContentView(inlineUi.build());
+        View content = inlineUi.build();
+        setContentView(content);
+        inlineFullScreen = new FullScreen(content);
+        inlineUi.attachFullScreen(inlineFullScreen);
         inlineUi.startScanIfNeeded();
+    }
+
+    /**
+     * The overlay reads touches in its own host view; here the activity is the host. Either
+     * way every touch, wherever it lands, brings the device's side bar back.
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && inlineFullScreen != null) {
+            inlineFullScreen.onUserTouch();
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
@@ -180,6 +197,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (inlineFullScreen != null) inlineFullScreen.destroy();
         if (inlineUi != null) inlineUi.destroy();
         super.onDestroy();
     }

@@ -9,6 +9,12 @@ finds it over SSDP.
 **2160 × 1080 px**, 320 dpi, density 2.0. The app window is **2000 × 1080** (160 px of
 system chrome). It is *not* 1280×480, whatever the spec sheets say — this was measured.
 
+That 160 px is the firmware's side bar on the right. Android only reserves space like that
+for a system bar, so it is almost certainly registered as the navigation bar — which means an
+app is allowed to ask for it to be hidden. **FULLSCR** in MISC OPTS does exactly that; see
+`windows.md`. Because "almost certainly" is not something to ship blind on a device with no
+debugger, `FullScreen` proves it at runtime and reverts itself if the firmware refuses.
+
 A wide, short 2:1 display, which happens to suit Winamp's layout. A 13-pixel skin row is
 about 3 mm on it: readable, unpleasant to hit, which is why the windows can be scaled.
 

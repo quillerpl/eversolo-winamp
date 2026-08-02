@@ -38,7 +38,7 @@ stakes are a nice thing to use, not a product.
    installer reports success and the device silently keeps the old app.
 3. **Never trust HTTP 200.** The real status is in the JSON body, and `openFile` returns
    success for files it silently refuses to play. Confirm against `getState`.
-4. **Prove it off-device.** `./player/tools/run-jvm-tests.sh` (209 assertions) and the
+4. **Prove it off-device.** `./player/tools/run-jvm-tests.sh` (224 assertions) and the
    preview scripts. There is no debugger on the device and every build costs a browser
    upload. A test that passes against the broken code is not a test.
 5. **Sprite coordinates are generated, never typed** — `player/tools/gen-*.py`.

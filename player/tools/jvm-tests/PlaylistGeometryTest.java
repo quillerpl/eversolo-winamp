@@ -5,7 +5,11 @@ import org.eversolo.winamp.skin.GenSprites;
 import org.eversolo.winamp.skin.PleditStyle;
 import org.eversolo.winamp.skin.WindowScales;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The playlist window's arithmetic, proved on a laptop.
@@ -25,7 +29,26 @@ public class PlaylistGeometryTest {
         }
     }
 
-    public static void main(String[] args) {
+    /**
+     * How many buttons the MISC OPTS fly-out has, read out of ZoomChooser rather than typed
+     * here. ZoomChooser draws, so it imports android.graphics and cannot be compiled on this
+     * JVM - but a hand-copied 4 would keep passing after somebody added a fifth item, and a
+     * test that passes against the broken code is not a test.
+     */
+    static int flyoutItems() throws Exception {
+        String dir = System.getProperty("player.dir", "player");
+        String src = new String(Files.readAllBytes(Paths.get(
+                dir, "skin/src/main/java/org/eversolo/winamp/skin/ZoomChooser.java")));
+        Matcher m = Pattern.compile("LEVELS\\s*=\\s*\\{([^}]*)\\}").matcher(src);
+        if (!m.find()) throw new IllegalStateException("ZoomChooser.LEVELS not found");
+        if (!src.contains("ITEMS = LEVELS.length + 1")) {
+            throw new IllegalStateException(
+                    "ZoomChooser.ITEMS is no longer LEVELS + 1 - update this test");
+        }
+        return m.group(1).split(",").length + 1;
+    }
+
+    public static void main(String[] args) throws Exception {
         System.out.println("=== Winamp's own default window ===");
         PlaylistGeometry base = PlaylistGeometry.base();
         check("width", base.width, 275);
@@ -189,6 +212,28 @@ public class PlaylistGeometryTest {
                     browser.tab(3).x + browser.tab(3).w < browser.width, true);
             check("x" + z + " browser buttons still fit",
                     browser.bottomButton(2).x > GenSprites.LEFT_W, true);
+        }
+
+        System.out.println("\n=== the MISC OPTS fly-out fits inside its window ===");
+        // It stacks upwards from the button that opened it, so adding FULLSCR pushed it one
+        // button higher. At x2 the windows are at their shortest, which is where it would
+        // run off the top first - and 2160 is what the full-screen mode asks for.
+        final int ITEMS = flyoutItems();
+        check("fly-out items (zoom levels + FULLSCR)", ITEMS, 4);
+        for (int screenW : new int[]{2000, 2160}) {
+            for (float z : new float[]{1f, 1.5f, 2f}) {
+                int s2 = WindowScales.zoomed(screenW, SH, WANTED, z);
+                PlaylistGeometry pg = new PlaylistGeometry(
+                        PlaylistGeometry.widthFor(screenW, s2),
+                        PlaylistGeometry.heightFor(SH, s2));
+                int top = pg.menuButton(3).y + GenSprites.BUTTON_H * (1 - ITEMS);
+                check(screenW + " x" + z + ": playlist fly-out clears the title bar",
+                        top >= PlaylistGeometry.TOP_H, true);
+                GenGeometry gb = new GenGeometry(screenW / s2, SH / s2);
+                int btop = gb.bottomButton(2).y + GenSprites.BUTTON_H * (1 - ITEMS);
+                check(screenW + " x" + z + ": browser fly-out clears the title bar",
+                        btop >= GenSprites.TITLE_H, true);
+            }
         }
 
         System.out.println("\n=== shared list arithmetic ===");

@@ -25,6 +25,12 @@ them.
   size where a row can be tapped. The owner chose this over shrinking everything.
 * **The browser is a browser only**: no transport, and tapping a track does not play it.
 * **Nothing may be reachable only by a gesture.**
+* **Full screen is asked for, then verified — never assumed.** The firmware's side bar is
+  almost certainly the navigation bar, but "almost certainly" is not shippable to a device
+  with no debugger. `FullScreen` requests the hide without the full-bleed layout, watches for
+  the window to actually grow, and reverts if it does not. The obvious shortcut —
+  `FLAG_LAYOUT_NO_LIMITS`, take the space and hope — would leave the bar sitting on top of the
+  playlist's right-hand edge on any firmware that says no.
 
 ## Dead ends — do not rebuild these
 

@@ -31,13 +31,34 @@ behind a long-press and regretting it.
 
 * **Playlist:** a tap selects, a double tap plays, and the window's own ▶ plays whatever is
   selected. The five fly-out menus (ADD/REM/SEL/MISC/LIST) work as in Winamp; MISC → MISC
-  OPTS holds the zoom chooser, where Winamp kept its options.
+  OPTS holds the zoom chooser and the FULLSCR switch, where Winamp kept its options.
 * **Browser:** tapping a folder or album opens it, tapping a track selects it, ADD puts the
   selection in the playlist — or everything listed, if nothing is selected. That second rule
   makes "add this whole album" one tap.
 * **Main window:** the X quits, the clock toggles elapsed/remaining, the title toggles
   tags/file name, the little LCD toggles the analyser, and a long press on the title bar
   opens the log console.
+
+## Full screen
+
+**FULLSCR**, in the same fly-out as the zoom in both scrolling windows, hides the device's
+side bar five seconds after the last touch and brings it straight back on the next one — a
+touch anywhere, not a swipe, so rule 7 holds. It is remembered between runs and defaults off.
+
+It is the **top** item, above x1. The fly-out is drawn over the button that opened it, so the
+bottom item sits under the finger that just tapped and a second tap fires it. That has always
+been true of x2; x2 is a survivable accident and silently going full screen is not, so the
+zoom levels keep the positions they have always had.
+
+`FullScreen` in `:app` owns it, and the interesting part is that it does not trust the idea to
+work. It asks for the bar to go **without** also asking for a full-bleed layout, so that a
+refusal leaves nothing drawn underneath the bar; only once the window is seen to grow past its
+old width does it take the extra space for good. If the window has not grown after 2.5 s it
+puts every flag back and logs why. Once proven, the window stays 2160 px wide even while the
+bar is briefly visible — otherwise the whole layout would re-scale twice on every touch.
+
+The main window does not get bigger (×7 either way, 1925 × 812) — it just stops sitting 80 px
+left of the screen's real centre. The playlist goes 2000 → 2100 px and the browser fills 2160.
 
 ## Feedback
 

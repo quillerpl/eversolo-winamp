@@ -14,8 +14,10 @@ import android.graphics.Rect;
  * larger whole-number scale rather than stretching the text inside it. Bigger rows, fewer
  * of them.
  *
- * It draws as three genex.bmp buttons stacked above whatever opened it, the same way the
- * playlist's own menus fly out.
+ * It draws as a stack of genex.bmp buttons above whatever opened it, the same way the
+ * playlist's own menus fly out. The last one in the stack is not a zoom at all but the
+ * FULLSCR toggle, which lives here because MISC OPTS is where the window options already are
+ * - and because a feature reachable only by a gesture is against the rules.
  */
 public final class ZoomChooser {
 
@@ -23,11 +25,31 @@ public final class ZoomChooser {
     public static final float[] LEVELS = {1f, 1.5f, 2f};
     public static final String[] LABELS = {"x1", "x1.5", "x2"};
 
+    /**
+     * The toggle is the <em>top</em> item, not the bottom one.
+     *
+     * The stack is drawn over the button that opened it, so whichever item is last sits
+     * directly under the finger that just tapped - and a second tap in the same place fires
+     * it. That has always been true of x2, and x2 is a survivable accident. Silently going
+     * full screen is not, so the zoom levels keep the positions they have always had and the
+     * toggle goes furthest away, where it has to be reached for.
+     */
+    public static final int FULLSCREEN = 0;
+
+    /** Zoom levels plus the toggle. */
+    public static final int ITEMS = LEVELS.length + 1;
+
+    /** The zoom level an item stands for, or -1 for the toggle. */
+    public static int levelOf(int item) { return item - 1; }
+
+    private static final String FULLSCREEN_LABEL = "FULLSCR";
+
     private final Rect src = new Rect();
     private final Rect dst = new Rect();
 
     private boolean open;
     private int current;
+    private boolean fullScreen;
 
     public boolean isOpen() { return open; }
     public void open() { open = true; }
@@ -36,17 +58,20 @@ public final class ZoomChooser {
     public int current() { return current; }
     public void setCurrent(int i) { current = Math.max(0, Math.min(LEVELS.length - 1, i)); }
 
+    public boolean isFullScreen() { return fullScreen; }
+    public void setFullScreen(boolean on) { fullScreen = on; }
+
     /** Item {@code i}, stacked upwards from the button that opened the chooser. */
     public PlaylistGeometry.Box item(PlaylistGeometry.Box anchor, int i) {
         int h = GenSprites.BUTTON_H;
-        return new PlaylistGeometry.Box(anchor.x, anchor.y + h * (1 + i - LEVELS.length),
+        return new PlaylistGeometry.Box(anchor.x, anchor.y + h * (1 + i - ITEMS),
                 GenSprites.BUTTON_W, h);
     }
 
     /** Which item a touch landed on, or -1. */
     public int hit(PlaylistGeometry.Box anchor, float x, float y) {
         if (!open) return -1;
-        for (int i = 0; i < LEVELS.length; i++) {
+        for (int i = 0; i < ITEMS; i++) {
             if (item(anchor, i).contains(x, y)) return i;
         }
         return -1;
@@ -62,10 +87,13 @@ public final class ZoomChooser {
         if (genex == null) return;
 
         Paint.FontMetrics fm = text.getFontMetrics();
-        for (int i = 0; i < LEVELS.length; i++) {
+        for (int i = 0; i < ITEMS; i++) {
             PlaylistGeometry.Box b = item(anchor, i);
+            // A zoom item is shown pressed when it is the one in force; the toggle is shown
+            // pressed when full screen is on. Same idea, so it reads the same way.
+            boolean selected = i == FULLSCREEN ? fullScreen : levelOf(i) == current;
             SkinSprites.Rect r = GenSprites.src(
-                    (i == current || i == pressed) ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON");
+                    (selected || i == pressed) ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON");
             if (r == null) continue;
             src.set(r.x, r.y, r.x + r.w, r.y + r.h);
             dst.set(b.x, b.y, b.x + b.w, b.y + b.h);
@@ -74,7 +102,8 @@ public final class ZoomChooser {
             text.setColor(0xFF101010);
             text.setTextAlign(Paint.Align.CENTER);
             float baseline = b.y + (b.h - (fm.descent - fm.ascent)) / 2f - fm.ascent;
-            c.drawText(LABELS[i], b.x + b.w / 2f, baseline, text);
+            c.drawText(i == FULLSCREEN ? FULLSCREEN_LABEL : LABELS[levelOf(i)],
+                    b.x + b.w / 2f, baseline, text);
         }
         text.setTextAlign(Paint.Align.LEFT);
     }

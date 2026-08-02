@@ -65,6 +65,8 @@ public final class PlaylistWindowView extends View {
         void onFocused();
         /** An index into {@link ZoomChooser#LEVELS}, from MISC OPTS. */
         void onZoom(int level);
+        /** FULLSCR in MISC OPTS: hide the device's side bar while the screen is untouched. */
+        void onFullScreen(boolean on);
     }
 
     /** One line of the list, already formatted - the view does no library lookups. */
@@ -158,6 +160,11 @@ public final class PlaylistWindowView extends View {
 
     public void setZoom(int index) {
         zoom.setCurrent(index);
+        invalidate();
+    }
+
+    public void setFullScreen(boolean on) {
+        zoom.setFullScreen(on);
         invalidate();
     }
 
@@ -582,9 +589,15 @@ public final class PlaylistWindowView extends View {
         if (zoom.isOpen()) {
             int which = zoom.hit(geo.menuButton(3), x, y);
             if (which >= 0 && which == zoomPressed && callbacks != null) {
-                zoom.setCurrent(which);
                 zoom.close();
-                callbacks.onZoom(which);
+                if (which == ZoomChooser.FULLSCREEN) {
+                    boolean on = !zoom.isFullScreen();
+                    zoom.setFullScreen(on);
+                    callbacks.onFullScreen(on);
+                } else {
+                    zoom.setCurrent(ZoomChooser.levelOf(which));
+                    callbacks.onZoom(ZoomChooser.levelOf(which));
+                }
             }
             zoomPressed = -1;
             invalidate();

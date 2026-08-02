@@ -13,8 +13,8 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 20
-        versionName "0.20-seekfix"
+        versionCode 21
+        versionName "0.21-fullscr"
     }
     buildTypes {
         debug { minifyEnabled false }

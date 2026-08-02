@@ -1,6 +1,6 @@
 # Status — what works, what is untested
 
-Current build **v0.20-seekfix** (versionCode 20). With nothing playing, the title strip
+Current build **v0.21-fullscr** (versionCode 21). With nothing playing, the title strip
 shows the running version; that is the quickest check that an install took.
 
 ## Working, confirmed on the device
@@ -23,6 +23,10 @@ shows the running version; that is the quickest check that an install took.
    switches tags/file name and should read *song - album - artist*.
 3. **kbps / kHz / mono-stereo** — never confirmed since they were wired up.
 4. **SAVE LIST / LOAD LIST**, which write and read `.m3u` in `EverSoloWinamp/playlists`.
+5. **FULLSCR** — the whole point of v0.21, and the one thing here that could turn out to be
+   impossible rather than merely broken: it depends on the firmware letting an overlay hide
+   the side bar. It reverts itself and logs if not, so the failure is safe and legible. Turn
+   it on in MISC OPTS; expect the bar to go five seconds later and the windows to widen.
 
 ## Not built, and why
 
