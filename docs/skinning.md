@@ -54,10 +54,18 @@ in a preview and invisible in a diff.
 
 ## Where the skin comes from
 
-`SkinStore` owns this. It looks for the chosen skin first, then any `.wsz`/`.zip` in the
-likely folders on **every** volume — `EverSoloWinamp/skins`, `skins`, `Download`, and each
-volume root — then the one bundled in the APK. The chosen path is remembered in prefs, so it
-is a decision rather than whatever `listFiles` returned first.
+`SkinStore` owns this. It looks for the chosen skin first, then walks **every** volume for
+`.wsz`/`.zip`, then falls back to the one bundled in the APK. The chosen path is remembered in
+prefs, so it is a decision rather than whatever `listFiles` returned first.
+
+The walk is `SkinFinder` in `:library` — Android-free, so `SkinFinderTest` can run it against
+a real directory tree rather than an imagined one. Breadth-first to depth 6, skipping
+`Android/`, dot-folders and `LOST.DIR`, with a 60,000-file backstop that says so in the log if
+it ever trips. **It looks everywhere on purpose**: the first version searched five named
+folders, so a skin at `USB/Music/Winamp stuff/base.wsz` did not exist as far as the app was
+concerned, and nothing on screen said why. Cost is not the objection it sounds like — the
+music scanner already walks 5,000 files in under a second on this hardware, and an empty
+emulator volume came back in 5 ms.
 
 **Release builds carry no skin.** The classic one is Nullsoft's artwork and is not this
 project's to redistribute, so it lives in `src/debug/assets/skins/` and ships only in the

@@ -29,8 +29,8 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 28
-        versionName "0.28-skins"
+        versionCode 29
+        versionName "0.29-skinwalk"
     }
     signingConfigs {
         if (keystoreFile.exists()) {

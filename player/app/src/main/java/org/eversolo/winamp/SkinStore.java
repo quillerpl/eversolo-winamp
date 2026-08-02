@@ -4,12 +4,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import org.eversolo.winamp.core.Logs;
+import org.eversolo.winamp.library.SkinFinder;
 import org.eversolo.winamp.library.VolumeDiscovery;
 import org.eversolo.winamp.skin.Skin;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -33,11 +33,6 @@ public final class SkinStore {
 
     /** Where the app suggests keeping them, and the first place it looks. */
     public static final String HOME = "/storage/emulated/0/EverSoloWinamp/skins";
-
-    /** Directories worth walking on each volume. Walking a whole SSD to find a skin is not. */
-    private static final String[] LIKELY = {
-            "EverSoloWinamp/skins", "skins", "Download", "Downloads", "",
-    };
 
     private final Context ctx;
 
@@ -84,34 +79,29 @@ public final class SkinStore {
         return bundled != null && bundled.isUsable() ? bundled : null;
     }
 
-    /** Every `.wsz`/`.zip` on every volume, in the places a skin plausibly is. */
+    /** Every `.wsz`/`.zip` on every volume, wherever it happens to be. */
     public List<File> findAll() {
-        List<File> found = new ArrayList<>();
+        return search().skins;
+    }
+
+    /**
+     * The same walk, but keeping what it had to look at - the first-run screen says so, since
+     * "no skins found" is much easier to trust when it also says where it looked.
+     */
+    public SkinFinder.Result search() {
         List<File> roots = new ArrayList<>();
         roots.add(new File("/storage/emulated/0"));
         for (File v : VolumeDiscovery.findRoots()) {
             if (!roots.contains(v)) roots.add(v);
         }
-        for (File root : roots) {
-            for (String sub : LIKELY) {
-                File dir = sub.isEmpty() ? root : new File(root, sub);
-                collect(dir, found);
-            }
+        long started = System.currentTimeMillis();
+        SkinFinder.Result r = SkinFinder.find(roots);
+        Logs.i(TAG, r + " in " + (System.currentTimeMillis() - started) + " ms across "
+                + roots.size() + " volume(s)");
+        if (r.truncated) {
+            Logs.w(TAG, "the skin walk stopped at " + SkinFinder.MAX_FILES
+                    + " files, so some may have been missed");
         }
-        Collections.sort(found);
-        Logs.i(TAG, "found " + found.size() + " skin file(s)");
-        return found;
-    }
-
-    /** One directory, not a recursive walk: a skin sitting three folders deep is not found. */
-    private void collect(File dir, List<File> into) {
-        if (dir == null || !dir.isDirectory()) return;
-        File[] files = dir.listFiles();
-        if (files == null) return;
-        for (File f : files) {
-            if (!f.isFile()) continue;
-            String n = f.getName().toLowerCase();
-            if ((n.endsWith(".wsz") || n.endsWith(".zip")) && !into.contains(f)) into.add(f);
-        }
+        return r;
     }
 }

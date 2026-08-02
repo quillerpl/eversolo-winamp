@@ -27,7 +27,7 @@ is not mine to hand out. See `THIRD-PARTY-NOTICES.md`.
 
 On first run the app asks for one. Grab a `.wsz` from
 [skins.webamp.org](https://skins.webamp.org) — there are tens of thousands — and put it on a
-USB stick or in `EverSoloWinamp/skins` on the device. Change it later from the **Winamp logo
+USB stick or anywhere on the device — it searches for it. Change it later from the **Winamp logo
 in the player's bottom-right corner**:
 
 ![The skin chooser](docs/images/skin-chooser.png)

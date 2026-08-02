@@ -105,7 +105,8 @@ public class MainActivity extends Activity {
      */
     private void buildSkinGate() {
         SkinStore store = new SkinStore(this);
-        List<File> found = store.findAll();
+        org.eversolo.winamp.library.SkinFinder.Result scan = store.search();
+        List<File> found = scan.skins;
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -127,11 +128,14 @@ public class MainActivity extends Activity {
         words.setText(found.isEmpty()
                 ? "This player wears a classic Winamp skin, and it does not come with one -"
                   + " those are other people's artwork.\n\n"
-                  + "Get a .wsz skin file (there are thousands at skins.webamp.org), put it"
-                  + " on a USB stick or in this folder:\n\n    " + SkinStore.HOME + "\n\n"
-                  + "then tap Look again."
-                : "Tap the one you want. You can change it later from the Winamp logo in the"
-                  + " bottom-right corner of the player.");
+                  + "Get a .wsz skin file (there are thousands at skins.webamp.org) and put"
+                  + " it anywhere on a USB stick or on this device - it will be found. Then"
+                  + " tap Look again.\n\n"
+                  + "Nothing found yet. Looked through " + scan.foldersSeen + " folders and "
+                  + scan.filesSeen + " files."
+                : "Tap the one you want - found in " + scan.foldersSeen + " folders searched."
+                  + " You can change it later from the Winamp logo in the bottom-right"
+                  + " corner of the player.");
         box.addView(words);
 
         for (final File f : found) {

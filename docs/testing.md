@@ -7,7 +7,7 @@ bug that reaches it costs ten minutes, while the same bug caught here costs seco
 ## The JVM suite
 
 ```bash
-./player/tools/run-jvm-tests.sh          # 224 assertions
+./player/tools/run-jvm-tests.sh          # 254 assertions
 ```
 
 It generates real audio fixtures with ffmpeg (testing parsers against files we synthesised
@@ -22,6 +22,7 @@ sources, and runs them on a desktop JVM.
 | `PlaylistGeometryTest` | Window sizing, scrolling, hit-testing, zoom, `pledit.txt` colours, and that the MISC OPTS fly-out fits at 2000 **and** 2160 px |
 | `FftTest` | The analyser's maths, against sine waves of known pitch |
 | `SequencerTest` | The handover, and the two ways a user moves the playhead |
+| `SkinFinderTest` | The skin walk, against a real directory tree: nesting, USB volumes, the folders it refuses to enter, the depth limit |
 
 Modules are kept Android-free specifically so they can be tested here. `Logs` is the one
 exception, compiled against a stub `android.util.Log` in `tools/jvm-tests/stubs/`.

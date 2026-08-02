@@ -13,6 +13,7 @@
 #                             the MISC OPTS fly-out, for the playlist and browser windows
 #   FftTest               22  the analyser's maths against sine waves of known pitch
 #   SequencerTest         16  the track-to-track handover and the two ways to move the playhead
+#   SkinFinderTest        14  the skin walk, against a real directory tree on disk
 #
 # Usage:  ./tools/run-jvm-tests.sh
 set -e
@@ -71,6 +72,8 @@ printf '#EXTM3U\n#EXTINF:60,Caf\xe9 del Mar\n../Leonard Cohen/[M] Old Ideas [325
 SRC="$BUILD/sources.txt"
 find "$HERE/tags/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' > "$SRC"
 echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/Track.java\"" >> "$SRC"
+# The skin walk carries no Android imports either, so the tree it walks can be a real one.
+echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/SkinFinder.java\"" >> "$SRC"
 echo "\"$HERE/playlist/src/main/java/org/eversolo/winamp/playlist/Playlist.java\"" >> "$SRC"
 # The sequencer talks to the PlaybackEngine interface (D4), so a fake engine can stand in.
 echo "\"$HERE/playlist/src/main/java/org/eversolo/winamp/playlist/PlaylistController.java\"" >> "$SRC"
@@ -89,14 +92,14 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/SkinSprites.java\"" >>
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >> "$SRC"
 # :dsp is plain Java for exactly this reason - the analyser's maths is provable here.
 find "$HERE/dsp/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' >> "$SRC"
-for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest; do
+for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest SkinFinderTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done
 
 "$JAVAC" -encoding UTF-8 -nowarn -d "$BUILD/classes" @"$SRC"
 
 fail=0
-for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest"; do
+for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest" "SkinFinderTest"; do
   set -- $t
   echo; echo "=== $1 ==="
   "$JAVA" -Dfile.encoding=UTF-8 -Dplayer.dir="$HERE" -cp "$BUILD/classes" "$@" || fail=1
