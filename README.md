@@ -25,10 +25,9 @@ built into it that you use from an ordinary web browser.
 
 1. **Download the `.apk` file** from the link above, onto a computer that is on the same
    wi-fi as the streamer.
-2. **Find the streamer's address.** It looks like `192.168.1.207` and it is in the Eversolo's
-   own settings, under network.
+2. **Find the streamer's address.** It looks like `192.168.1.XXX` 
 3. **In your browser, go to `http://` that address `:18888`** — so for the example above,
-   `http://192.168.1.207:18888`. A page appears asking for a file. Choose the `.apk` you
+   `http://192.168.1.XXX:18888`. A page appears asking for a file. Choose the `.apk` you
    downloaded. It uploads and installs itself.
 4. **On the streamer, open "Eversolo Winamp".** It is in the apps list.
 5. **Say yes to "display over other apps."** The app explains why and shows a button that
