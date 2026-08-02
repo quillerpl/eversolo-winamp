@@ -13,6 +13,16 @@ device's local HTTP API, which bypasses Android's sample-rate conversion and rea
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
 
+> **This is a weekend project, built for fun and out of nostalgia.** One person, one
+> streamer, an undocumented API and a strong memory of what a music player used to look
+> like. It is not a product and it is not polished to one: expect rough edges, expect
+> decisions made because they were interesting rather than because they were optimal, and
+> expect it to break the moment Eversolo changes their firmware. If it is useful to you,
+> that is a happy accident — please do not file it under "supported software".
+>
+> Where the hardware cannot do something, the app says
+> so rather than faking it, and the reasoning is written down in `docs/decisions.md`.
+
 ## Download and install
 
 **[Download the latest version](https://github.com/quillerpl/eversolo-winamp/releases/latest)**
@@ -60,15 +70,6 @@ in the player's bottom-right corner**:
 
 ![The skin chooser](docs/images/skin-chooser.png)
 
-> **This is a weekend project, built for fun and out of nostalgia.** One person, one
-> streamer, an undocumented API and a strong memory of what a music player used to look
-> like. It is not a product and it is not polished to one: expect rough edges, expect
-> decisions made because they were interesting rather than because they were optimal, and
-> expect it to break the moment Eversolo changes their firmware. If it is useful to you,
-> that is a happy accident — please do not file it under "supported software".
->
-> Where the hardware cannot do something, the app says
-> so rather than faking it, and the reasoning is written down in `docs/decisions.md`.
 
 > **Status:** in daily use on the author's own DMP-A6. All three windows work, playback and
 > the playlist work, and so does the spectrum analyser — which decodes the playing file
