@@ -155,8 +155,7 @@ The DMP-A6 is a peculiar target, and most of the design follows from what it wil
 ## Finding your way around
 
 The documentation is deliberately split in two, because most of it only matters when you are
-touching a particular part — and because reading it all costs about 30,000 tokens if you are
-an LLM.
+touching a particular part.
 
 **[`docs/`](docs/) is the front door.** [`docs/00-index.md`](docs/00-index.md) is a page long
 and routes you to the one file that answers your question: `playback.md`, `skinning.md`,
