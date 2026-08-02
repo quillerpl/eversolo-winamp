@@ -35,65 +35,53 @@ states from inside `play()`, as the real one does — possible at all. **The fir
 this test passed against the broken code**; it only became a test when the fake started
 doing that.
 
-### PICK UP HERE — what is untested, in the order worth testing
+### PICK UP HERE — what to test, in order
 
-Install `~/Downloads/EversoloWinamp.apk` (versionCode 19). The title strip reads
-`EVERSOLO WINAMP 0.19-ANALYSER` with nothing playing; if it does not, the install did not
-take and the versionCode needs bumping again.
+Install `~/Downloads/EversoloWinamp.apk` (**versionCode 20**). With nothing playing the
+title strip reads `EVERSOLO WINAMP 0.20-SEEKFIX`; if it does not, the install did not take
+and the versionCode needs bumping again.
 
 **Confirmed working on the device**
 
-* The playlist window, and the browser window with its ×1 / ×1.5 / ×2 zoom.
+* All three windows, and the ×1 / ×1.5 / ×2 zoom.
 * The marks showing what is already in the playlist, and the ADD message.
-* **The spectrum analyser** — decoded from the file, "works great", a split-second behind,
+* **The spectrum analyser** — decoded from the file. "Works great", a split second behind,
   which is fine for something indicative.
 * Everything from phases 0–3: library, transport, playlists.
 
-**Built but never run on hardware — this is the whole to-do list**
+**To test, in this order**
 
-1. **The handover fixes (v0.20).** Tap a track in the playlist while another is playing:
-   the tapped one should play. Drag the position bar backwards from near the end: it should
-   stay on the track. Then let a track run out normally, to check the handover still works
-   at all — that is the thing these guards could plausibly have broken.
-2. **The analyser's remaining rough edge:** it is a split second behind, which is the FFT
-   window plus the pacing. `FileSpectrum.FRAME_MS` and the buffering are where to look if it
-   ever matters.
-3. ~~**The analyser (v0.19), and it is the risky one.**~~ *Confirmed working.* Kept for the
-   failure modes, in case a codec-less file turns up: `FileSpectrum` decodes the playing
-   file with MediaCodec and runs the FFT in `:dsp`. Three ways it can fail, each with its
-   own symptom:
-   * `CANNOT DECODE THIS FILE` in the title strip → this firmware's MediaCodec will not
-     open FLAC. It cannot read FLAC *tags* either (a different subsystem, but a warning).
-     Fall back: test with an MP3 to separate "no FLAC decoder" from "no decoder at all".
-   * Bars move but lag or jump → the pacing or the 400 ms re-seek threshold in
-     `FileSpectrum.DRIFT_MS`.
-   * Playback stutters → the second decode is too expensive; raise `FFT_SIZE` or emit less
-     often before giving up on it.
-   The maths itself is proved off-device (`FftTest`, 22 assertions), so a wrong-looking
-   display is a decode, sync or scaling problem, not an FFT one.
-2. **The playlist surviving a restart** (v0.16). Add a few tracks, close the app from the
-   main window's X, reopen. Expect `PLAYLIST RESTORED - N TRACKS` once the scan finishes,
-   about 13 s in. Clearing is REM → REM ALL or LIST OPTS → NEW LIST.
-3. **The two LCD taps** (v0.15). Tapping the clock switches elapsed/remaining with a minus
-   sign; tapping the title switches tags/file name. The tags should read
-   *song - album - artist*.
+1. **The handover fixes (v0.20)** — these are the newest and they touch playback, so they
+   come first. Tap a track in the playlist while another is playing: the tapped one should
+   play, not the one after it. Drag the position bar backwards from near the end of a track:
+   it should stay put. Then **let a track run out normally**, because that is the thing
+   these guards could plausibly have broken.
+2. **The playlist surviving a restart** (v0.16). Add a few tracks, close from the main
+   window's X, reopen. Expect `PLAYLIST RESTORED - N TRACKS` once the scan finishes, about
+   13 s in. Clearing is REM → REM ALL, or LIST OPTS → NEW LIST.
+3. **The two LCD taps** (v0.15). The clock switches elapsed/remaining with a minus sign; the
+   title switches tags/file name and should read *song - album - artist*.
 4. **kbps / kHz / mono-stereo** (v0.12). Never confirmed since the fix.
-5. **SAVE LIST and LOAD LIST** in the playlist window, which write and read `.m3u` in
-   `EverSoloWinamp/playlists`.
+5. **SAVE LIST and LOAD LIST**, which write and read `.m3u` in `EverSoloWinamp/playlists`.
+
+**If the analyser ever misbehaves on another file**, the symptoms map cleanly:
+`CANNOT DECODE THIS FILE` means MediaCodec would not open it (try an MP3 to tell "no FLAC
+decoder" from "no decoder"); bars that lag or jump mean the pacing or `FileSpectrum.DRIFT_MS`;
+stuttering playback means the second decode is too expensive. The maths is proved off-device
+by `FftTest`, so a wrong-looking display is a decode, sync or scaling problem, never an FFT
+one.
 
 **Settled, do not revisit**
 
-* No equaliser: the API has no tone control and `isHasDSP` is false. The EQ button says so.
-* No `getSpectrum`: `{}` on every source, `isHasSpectrum` false. Documented in
-  API_FINDINGS.md with everything that was tried.
-* No MilkDrop or AVS presets: they need the live waveform at frame rate. Note that the file
-  decode in v0.19 *does* give us a waveform, so if the analyser works, a real
-  waveform-driven visualiser becomes possible after all — that is the one thing worth
-  reopening, and only then.
+* No equaliser: no tone control in the API, `isHasDSP` false. The EQ button says so.
+* No `getSpectrum`: `{}` on every source, `isHasSpectrum` false. API_FINDINGS.md records
+  everything that was tried.
+* No MilkDrop or AVS presets: they need the waveform at frame rate. **But the file decode
+  now gives us a waveform**, so a real waveform-driven visualiser has become possible after
+  all. That is the one thing worth reopening — and only now that the analyser works.
 
-**Build `v0.20-seekfix`. Phases 0–3 complete and confirmed on the device. Phase 4: three
-skinned windows — main, playlist editor and library browser — plus the spectrum analyser.
-The playlist window is confirmed on the device; the browser and the analyser are not yet.**
+**Build `v0.20-seekfix`. Phases 0–3 complete. Phase 4: three skinned windows and the
+spectrum analyser, all confirmed on the device except the items listed above.**
 
 ### The spectrum feed is dead, and the device says so itself
 
