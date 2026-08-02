@@ -20,13 +20,13 @@ audio, and this only replaces its face.
 > What it does try to be is *honest*. Where the hardware cannot do something, the app says
 > so rather than faking it, and the reasoning is written down in `docs/decisions.md`.
 
-> **Status:** running on the author's own DMP-A6. The three windows are confirmed working
-> on the device. The spectrum analyser is new and has not been run on hardware yet — it
-> decodes the playing file itself, because the device's `getSpectrum` turns out to be a
-> hollow endpoint (`isHasSpectrum` is false on every source). There will be no equalizer:
-> the API has no tone control of any kind, and sliders wired to nothing would contradict
-> the reason this exists. [PROJECT_PLAN.md](PROJECT_PLAN.md) opens with exactly what is
-> untested and in what order.
+> **Status:** in daily use on the author's own DMP-A6. All three windows work, playback and
+> the playlist work, and so does the spectrum analyser — which decodes the playing file
+> itself, because the device's `getSpectrum` turns out to be a hollow endpoint
+> (`isHasSpectrum` is false on every source). There is no equalizer and there will not be:
+> the API has no tone control of any kind, and sliders wired to nothing would contradict the
+> reason this exists. [`docs/status.md`](docs/status.md) has the current state and the short
+> list of things not yet confirmed on hardware.
 
 ---
 
