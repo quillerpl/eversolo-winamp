@@ -69,6 +69,8 @@ public final class PlaylistWindowView extends View {
         void onFullScreen(boolean on);
         /** MAIN x8: draw the main window one whole scale larger than fits, and crop it. */
         void onOversize(boolean on);
+        /** LYRICS: open the lyrics window for whatever is playing. */
+        void onLyrics();
     }
 
     /** One line of the list, already formatted - the view does no library lookups. */
@@ -601,6 +603,8 @@ public final class PlaylistWindowView extends View {
                     boolean on = !zoom.isFullScreen();
                     zoom.setFullScreen(on);
                     callbacks.onFullScreen(on);
+                } else if (which == ZoomChooser.LYRICS) {
+                    callbacks.onLyrics();
                 } else if (which == ZoomChooser.OVERSIZE) {
                     boolean on = !zoom.isOversize();
                     zoom.setOversize(on);

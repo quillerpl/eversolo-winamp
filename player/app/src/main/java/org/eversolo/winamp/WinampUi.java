@@ -20,6 +20,7 @@ import org.eversolo.winamp.playlist.Playlist;
 import org.eversolo.winamp.playlist.PlaylistController;
 import org.eversolo.winamp.skin.BrowserWindowView;
 import org.eversolo.winamp.skin.GenGeometry;
+import org.eversolo.winamp.skin.LyricsWindowView;
 import org.eversolo.winamp.skin.MainWindowView;
 import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.PlaylistWindowView;
@@ -91,6 +92,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private PlaylistWindowView playlistWindow;
     private BrowserWindowView browserWindow;
     private BrowserWindowView skinWindow;
+    private LyricsWindowView lyricsWindow;
     private SkinStore skins;
     private List<File> skinFiles = new ArrayList<>();
     private LibraryBrowser browser;
@@ -100,6 +102,13 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean playlistOpen = false;
     private boolean browserOpen = false;
     private boolean skinsOpen = false;
+    private boolean lyricsOpen = false;
+    private org.eversolo.winamp.tags.LrcParser.Lyrics lyrics;
+    /** Null rather than empty, so the very first look always runs even with no track. */
+    private String lyricsForPath = null;
+    /** The last position the device reported, and when we heard it, so we can interpolate. */
+    private long posMs, posHeardAt;
+    private boolean lyricsTicking = false;
     private boolean marqueeRunning = false;
     private boolean shuffleOn = false;
     private boolean repeatOn = false;
@@ -206,6 +215,17 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         skinWindow.setZoom(zoom);
         skinWindow.setVisibility(View.GONE);
         root.addView(skinWindow, centred());
+
+        lyricsWindow = new LyricsWindowView(ctx);
+        lyricsWindow.setSkin(skin);
+        lyricsWindow.setScale(playlistScale);
+        lyricsWindow.setGeometry(browserGeometry());
+        lyricsWindow.setCallbacks(new LyricsWindowView.Callbacks() {
+            @Override public void onClose() { closeLyrics(); }
+            @Override public void onFocused() { }
+        });
+        lyricsWindow.setVisibility(View.GONE);
+        root.addView(lyricsWindow, centred());
 
         // The analyser decodes the playing file itself: the device serves no spectrum
         // (isHasSpectrum is false on every source) but the samples are in the file, and we
@@ -385,12 +405,15 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         browserWindow.setGeometry(browserGeometry());
         skinWindow.setScale(playlistScale);
         skinWindow.setGeometry(browserGeometry());
+        lyricsWindow.setScale(playlistScale);
+        lyricsWindow.setGeometry(browserGeometry());
         // Sizing the lists to the usable width is only half of staying clear of the bar:
         // they are centred in the whole window, so they also have to slide over.
         float shift = WindowScales.centreShift(laidOutW, listW);
         playlistWindow.setTranslationX(shift);
         browserWindow.setTranslationX(shift);
         skinWindow.setTranslationX(shift);
+        lyricsWindow.setTranslationX(shift);
     }
 
     /**
@@ -442,6 +465,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Back closes one layer at a time; from the bare main window the host quits. */
     public boolean handleBack() {
+        if (lyricsOpen) {
+            closeLyrics();
+            return true;
+        }
         if (skinsOpen) {
             closeSkins();
             return true;
@@ -463,6 +490,68 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private Skin loadSkin() {
         if (skins == null) skins = new SkinStore(ctx);
         return skins.load();
+    }
+
+    // ---------------------------------------------------------------- lyrics
+
+    /** LYRICS in the options fly-out. */
+    private void openLyrics() {
+        lyricsOpen = true;
+        show(false, false, false, false, true);
+        loadLyricsIfTrackChanged();
+        startLyricsTicking(engine.state().isPlaying());
+        Logs.i(TAG, "lyrics window opened");
+    }
+
+    private void closeLyrics() {
+        lyricsOpen = false;
+        show(!playlistOpen && !browserOpen, playlistOpen, browserOpen, false, false);
+        Logs.i(TAG, "lyrics window closed");
+    }
+
+    /** Only re-read when the track actually changes; this is called on every poll. */
+    private void loadLyricsIfTrackChanged() {
+        Track t = playlist.current();
+        String path = t == null ? "" : t.absolutePath;
+        if (path.equals(lyricsForPath)) return;   // same track; this runs on every poll
+        lyricsForPath = path;
+        lyrics = path.isEmpty() ? null : LyricsStore.forTrack(path);
+
+        String heading = t == null ? "LYRICS" : t.title;
+        if (lyrics == null) {
+            lyricsWindow.setLines(heading, new ArrayList<String>(), false);
+            lyricsWindow.setStatus("No lyrics file for this track");
+        } else {
+            List<String> text = new ArrayList<>(lyrics.lines.size());
+            for (org.eversolo.winamp.tags.LrcParser.Line l : lyrics.lines) text.add(l.text);
+            lyricsWindow.setLines(heading, text, lyrics.synced);
+            if (!lyrics.synced) {
+                lyricsWindow.setStatus("These lyrics have no timings, so nothing is highlighted");
+            }
+        }
+    }
+
+    /**
+     * Move the highlight between polls.
+     *
+     * getState arrives about twice a second, and a highlight that only moved on a 500 ms grid
+     * would read as a slideshow rather than as following the singer. So the last reported
+     * position is carried forward with the local clock and corrected whenever a real one
+     * lands - the same trick the visualiser already uses.
+     */
+    private void startLyricsTicking(boolean playing) {
+        if (!playing || lyricsTicking) return;
+        lyricsTicking = true;
+        ui.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (!lyricsOpen || !engine.state().isPlaying()) { lyricsTicking = false; return; }
+                if (lyrics != null && lyrics.synced) {
+                    long now = posMs + (android.os.SystemClock.elapsedRealtime() - posHeardAt);
+                    lyricsWindow.setCurrent(lyrics.indexAt(now));
+                }
+                ui.postDelayed(this, VIS_FRAME_MS);
+            }
+        }, VIS_FRAME_MS);
     }
 
     // ---------------------------------------------------------------- the skin chooser
@@ -563,6 +652,12 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
     /** Only one window is up at a time: there is no room for two at a readable size. */
     private void show(boolean main, boolean playlistWin, boolean browserWin, boolean skinWin) {
+        show(main, playlistWin, browserWin, skinWin, false);
+    }
+
+    private void show(boolean main, boolean playlistWin, boolean browserWin,
+                      boolean skinWin, boolean lyricsWin) {
+        lyricsWindow.setVisibility(lyricsWin ? View.VISIBLE : View.GONE);
         mainWindow.setVisibility(main ? View.VISIBLE : View.GONE);
         playlistWindow.setVisibility(playlistWin ? View.VISIBLE : View.GONE);
         browserWindow.setVisibility(browserWin ? View.VISIBLE : View.GONE);
@@ -615,6 +710,10 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
             String title = nowPlayingText(s);
             mainWindow.setNowPlaying(title, s.positionMs, s.durationMs,
                     s.isPlaying(), s.status == PlaybackState.Status.PAUSED);
+            // Remember when we heard this, so the lyric highlight can run between polls.
+            posMs = s.positionMs;
+            posHeardAt = android.os.SystemClock.elapsedRealtime();
+            if (lyricsOpen) { loadLyricsIfTrackChanged(); startLyricsTicking(s.isPlaying()); }
             mainWindow.setVolumePercent(s.maxVolume > 0 ? s.volume * 100 / s.maxVolume : 0);
             mainWindow.setToggles(playlistOpen, false, shuffleOn, repeatOn);
             showQuality(s);
@@ -724,6 +823,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      */
     private void updateVisualiser() {
         boolean wanted = visualiserOn && !playlistOpen && !browserOpen && !skinsOpen
+                && !lyricsOpen
                 && engine.state().isPlaying();
         Track playing = playlist.current();
 
@@ -997,6 +1097,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
 
         @Override public void onOversize(boolean on) { setOversize(on); }
+
+        @Override public void onLyrics() { openLyrics(); }
     }
 
     // ---------------------------------------------------------------- browser window
@@ -1014,6 +1116,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
 
         @Override public void onOversize(boolean on) { setOversize(on); }
+
+        @Override public void onLyrics() { openLyrics(); }
     }
 
     /** The same window as the browser, pointed at skin files instead of music. */
@@ -1027,6 +1131,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onZoom(int level) { setZoom(level); }
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
         @Override public void onOversize(boolean on) { setOversize(on); }
+
+        @Override public void onLyrics() { openLyrics(); }
     }
 
     /** What the browser model needs from the app: the playlist, and somewhere to shout. */

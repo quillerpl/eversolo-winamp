@@ -13,7 +13,8 @@
 #                             the MISC OPTS fly-out, for the playlist and browser windows
 #   FftTest               22  the analyser's maths against sine waves of known pitch
 #   SequencerTest         16  the track-to-track handover and the two ways to move the playhead
-#   SkinFinderTest        14  the skin walk, against a real directory tree on disk
+#   SkinFinderTest        20  the skin walk, against a real directory tree on disk
+#   LrcTest               33  .lrc parsing and "which line is being sung"
 #
 # Usage:  ./tools/run-jvm-tests.sh
 set -e
@@ -90,16 +91,18 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenGeometry.java\"" >>
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/GenSprites.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/SkinSprites.java\"" >> "$SRC"
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >> "$SRC"
+# The lyrics line layout is Android-free for the same reason as the rest.
+echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/LyricsGeometry.java\"" >> "$SRC"
 # :dsp is plain Java for exactly this reason - the analyser's maths is provable here.
 find "$HERE/dsp/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' >> "$SRC"
-for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest SkinFinderTest; do
+for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest SkinFinderTest LrcTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done
 
 "$JAVAC" -encoding UTF-8 -nowarn -d "$BUILD/classes" @"$SRC"
 
 fail=0
-for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest" "SkinFinderTest"; do
+for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest" "SkinFinderTest" "LrcTest"; do
   set -- $t
   echo; echo "=== $1 ==="
   "$JAVA" -Dfile.encoding=UTF-8 -Dplayer.dir="$HERE" -cp "$BUILD/classes" "$@" || fail=1

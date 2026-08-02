@@ -42,6 +42,14 @@ UA = "EversoloWinamp/1.0.1 (https://github.com/quillerpl/eversolo-winamp)"
 LIKELY_MOUNTS = ["/Volumes/Share", "/Volumes/EF42-73B2", "/Volumes/Storage"]
 
 
+def say(msg):
+    """
+    Print and flush. Without the flush, piping this to a file or to `tee` shows nothing
+    for the first several thousand characters, and an hour-long run looks like a hang.
+    """
+    print(msg, flush=True)
+
+
 def find_library(given):
     if given:
         if not os.path.isdir(given):
@@ -145,12 +153,12 @@ def main():
         sys.exit("ffprobe is needed to read tags. Install it with:  brew install ffmpeg")
 
     root = find_library(args.folder)
-    print("Library : %s" % root)
-    print("Mode    : %s\n" % ("WRITING .lrc files" if args.write
-                              else "looking only - nothing will be written"))
+    say("Library : %s" % root)
+    say("Mode    : %s\n" % ("WRITING .lrc files" if args.write
+                            else "looking only - nothing will be written"))
 
     files = tracks_in(root)
-    print("Found %d audio files. Reading tags...\n" % len(files))
+    say("Found %d audio files. Reading tags...\n" % len(files))
 
     done = skipped = written = plain_only = missing = untagged = failed = 0
     misses = []
@@ -178,7 +186,7 @@ def main():
             except Exception as e:
                 failed += 1
                 misses.append(("lookup failed: %s" % e, path))
-                print("  !!  %s" % label)
+                say("  !!  %s" % label)
                 time.sleep(args.pace)
                 continue
 
@@ -187,19 +195,22 @@ def main():
                     with open(lrc, "w", encoding="utf-8") as fh:
                         fh.write(synced if synced.endswith("\n") else synced + "\n")
                     written += 1
-                print("  ok  %s%s" % (label, "" if how == "exact" else "   (matched by search)"))
+                say("  ok  %s%s" % (label, "" if how == "exact" else "   (matched by search)"))
             elif how == "plain-only":
                 plain_only += 1
                 misses.append(("only untimed lyrics available", path))
-                print("  --  %s   (no timings)" % label)
+                say("  --  %s   (no timings)" % label)
             else:
                 missing += 1
                 misses.append(("nothing in the database", path))
-                print("  ??  %s" % label)
+                say("  ??  %s" % label)
 
+            if done % 50 == 0:
+                say("      ... %d looked up, %d written, %.0f min elapsed"
+                    % (done, written, (time.time() - started) / 60))
             time.sleep(args.pace)
     except KeyboardInterrupt:
-        print("\nStopped. Anything already written is fine; run again to carry on.")
+        say("\nStopped. Anything already written is fine; run again to carry on.")
 
     mins = (time.time() - started) / 60
     print("\n---------------------------------------------")

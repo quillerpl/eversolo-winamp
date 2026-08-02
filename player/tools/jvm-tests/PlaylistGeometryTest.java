@@ -221,7 +221,7 @@ public class PlaylistGeometryTest {
         // button higher. At x2 the windows are at their shortest, which is where it would
         // run off the top first - and 2160 is what the full-screen mode asks for.
         final int ITEMS = flyoutItems();
-        check("fly-out items (zoom levels + MAIN x8 + FULLSCR)", ITEMS, 5);
+        check("fly-out items (zoom levels + LYRICS + MAIN x8 + FULLSCR)", ITEMS, 6);
         for (int screenW : new int[]{2000, 2160}) {
             for (float z : new float[]{1f, 1.5f, 2f}) {
                 int s2 = WindowScales.zoomed(screenW, SH, WANTED, z);

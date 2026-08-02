@@ -14,6 +14,7 @@ back. The user chose this over shrinking everything.
 | Playlist | `PlaylistWindowView` | `pledit.bmp` | `PlaylistGeometry` |
 | Browser | `BrowserWindowView` | `gen.bmp` / `genex.bmp` | `GenGeometry` |
 | Skins | `BrowserWindowView` again | `gen.bmp` / `genex.bmp` | `GenGeometry` |
+| Lyrics | `LyricsWindowView` | `gen.bmp` / `genex.bmp` | `GenGeometry` + `LyricsGeometry` |
 
 The skin chooser is a **second instance of the browser window**, not a fourth class. The view
 was already told nothing about what its rows mean, so all it needed was `setChrome` to relabel
@@ -45,6 +46,31 @@ behind a long-press and regretting it.
 * **Main window:** the X quits, the clock toggles elapsed/remaining, the title toggles
   tags/file name, the little LCD toggles the analyser, and a long press on the title bar
   opens the log console.
+
+## Lyrics
+
+**LYRICS**, the top item of the MISC OPTS fly-out, opens the words for whatever is playing,
+with the line being sung drawn at twice the size in bold and held in the middle of the window
+while the rest scroll past — the streaming-service arrangement.
+
+This is the one window that could not reuse `BrowserWindowView`: every other list in the app
+has rows of one height, and `ListMath` assumes it. Here one row is tall and the others are
+short, so the layout is its own — `LyricsGeometry`, Android-free and proved on the laptop,
+because "the sung line sits in the middle" is exactly the sort of claim that looks right in a
+screenshot and is half a line out in the hand.
+
+Two things make it feel right rather than cheap:
+
+* **The highlight runs between polls.** `getState` lands about twice a second, and a highlight
+  moving on a 500 ms grid reads as a slideshow. The last reported position is carried forward
+  with the local clock at 40 ms frames and corrected whenever a real one arrives — the same
+  trick the visualiser uses.
+* **The scroll eases** rather than jumping, covering a fifth of the remaining distance each
+  frame. A jump on every line change reads as a flicker.
+
+Words come from a `.lrc` sitting beside the track — see `library.md`. Embedded `LYRICS` tags
+are ignored on purpose: two thirds of this library has them and none is timed, so they can
+fill a panel but never move the highlight.
 
 ## Full screen
 

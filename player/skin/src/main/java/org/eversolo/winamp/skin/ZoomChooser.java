@@ -34,11 +34,12 @@ public final class ZoomChooser {
      * full screen is not, so the zoom levels keep the positions they have always had and the
      * toggle goes furthest away, where it has to be reached for.
      */
-    public static final int OVERSIZE = 0;
-    public static final int FULLSCREEN = 1;
+    public static final int LYRICS = 0;
+    public static final int OVERSIZE = 1;
+    public static final int FULLSCREEN = 2;
 
     /** How many items at the top are switches rather than zoom levels. */
-    public static final int TOGGLES = 2;
+    public static final int TOGGLES = 3;
 
     /** Zoom levels plus the switches. */
     public static final int ITEMS = LEVELS.length + TOGGLES;
@@ -46,7 +47,7 @@ public final class ZoomChooser {
     /** The zoom level an item stands for; negative for the switches. */
     public static int levelOf(int item) { return item - TOGGLES; }
 
-    private static final String[] TOGGLE_LABELS = {"MAIN x8", "FULLSCR"};
+    private static final String[] TOGGLE_LABELS = {"LYRICS", "MAIN x8", "FULLSCR"};
 
     private final Rect src = new Rect();
     private final Rect dst = new Rect();
@@ -100,7 +101,8 @@ public final class ZoomChooser {
             // A zoom item is shown pressed when it is the one in force; the toggle is shown
             // pressed when full screen is on. Same idea, so it reads the same way.
             boolean selected;
-            if (i == OVERSIZE)        selected = oversize;
+            if (i == LYRICS)          selected = false;   // an action, not a state
+            else if (i == OVERSIZE)   selected = oversize;
             else if (i == FULLSCREEN) selected = fullScreen;
             else                      selected = levelOf(i) == current;
             SkinSprites.Rect r = GenSprites.src(
