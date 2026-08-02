@@ -10,6 +10,16 @@ device's local HTTP API, which bypasses Android's sample-rate conversion and rea
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
 
+> **This is a weekend project, built for fun and out of nostalgia.** One person, one
+> streamer, an undocumented API and a strong memory of what a music player used to look
+> like. It is not a product and it is not polished to one: expect rough edges, expect
+> decisions made because they were interesting rather than because they were optimal, and
+> expect it to break the moment Eversolo changes their firmware. If it is useful to you,
+> that is a happy accident — please do not file it under "supported software".
+>
+> What it does try to be is *honest*. Where the hardware cannot do something, the app says
+> so rather than faking it, and the reasoning is written down in `docs/decisions.md`.
+
 > **Status:** running on the author's own DMP-A6. The three windows are confirmed working
 > on the device. The spectrum analyser is new and has not been run on hardware yet — it
 > decodes the playing file itself, because the device's `getSpectrum` turns out to be a
@@ -89,9 +99,23 @@ The DMP-A6 is a peculiar target, and most of the design follows from what it wil
 | **Android cannot read FLAC tags on this device** — `MediaMetadataRetriever` returns null | FLAC and ID3 tags are parsed by hand, in a module with no Android dependencies so it can be unit-tested |
 | **Android cannot decode most Winamp skin bitmaps** — the classic skin is largely BI_RLE8, which `BitmapFactory` returns null for | The project ships its own BMP decoder |
 
-The device API is written up in [API_FINDINGS.md](API_FINDINGS.md), what was measured on
-real hardware in [ANSWERS_Q1_Q7.md](ANSWERS_Q1_Q7.md), and the layering in
-[ARCHITECTURE.md](ARCHITECTURE.md).
+---
+
+## Finding your way around
+
+The documentation is deliberately split in two, because most of it only matters when you are
+touching a particular part — and because reading it all costs about 30,000 tokens if you are
+an LLM.
+
+**[`docs/`](docs/) is the front door.** [`docs/00-index.md`](docs/00-index.md) is a page long
+and routes you to the one file that answers your question: `playback.md`, `skinning.md`,
+`windows.md`, `library.md`, `analyser.md`, `api.md`, `device.md`, `build-install.md`,
+`testing.md`, `modules.md`, `decisions.md`, `status.md`. Each is short enough to read whole.
+
+The long documents at the root — [API_FINDINGS.md](API_FINDINGS.md) (the full endpoint
+survey), [ANSWERS_Q1_Q7.md](ANSWERS_Q1_Q7.md) (what was measured on real hardware),
+[ARCHITECTURE.md](ARCHITECTURE.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md) (the history) —
+are the deep reference. Go there when a `docs/` page sends you.
 
 ---
 

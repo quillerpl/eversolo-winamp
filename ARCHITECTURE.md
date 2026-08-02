@@ -1,5 +1,7 @@
 # Architecture — Winamp-Style Player for Eversolo DMP-A6
 
+> **Deep reference.** For the module map and how the layers meet, read `docs/modules.md`
+> instead — it is a page. This is the long-form version of the same thing.
 Companion documents: `API_FINDINGS.md` (the device API), `ANSWERS_Q1_Q7.md` (what was
 measured on the real device), `PROJECT_PLAN.md` (phasing), `CLAUDE.md` (working rules).
 

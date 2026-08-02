@@ -1,5 +1,8 @@
 # Project Plan — Winamp-Style Player for Eversolo DMP-A6
 
+> **Deep reference / history.** The living status is `docs/status.md` and the reasoning is
+> in `docs/decisions.md`. This file is the record of how the project got here, phase by
+> phase. Read it when you want the story behind a decision, not to find out what is true now.
 ---
 
 ## STATUS — 2 August 2026 (read this first)

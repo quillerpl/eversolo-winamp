@@ -1,5 +1,8 @@
 # Eversolo DMP-A6 — Local HTTP API Findings
 
+> **Deep reference.** The endpoints the app actually uses, and the traps, are summarised in
+> `docs/api.md` — start there. This is the full survey: every endpoint tried, what answered,
+> and what it returned.
 Investigated 31 July 2026 against a real device on the LAN.
 Device: **DMP-A6**, firmware **v1.5.90**, Android 11, IP **192.168.1.207**, API port **9529**.
 

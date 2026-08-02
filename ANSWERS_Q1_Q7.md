@@ -1,5 +1,8 @@
 # Addendum: Answers to Q1–Q7
 
+> **Deep reference.** What was measured on the real hardware, and what was not. The
+> conclusions that matter are folded into `docs/device.md`, `docs/api.md` and
+> `docs/playback.md`.
 Recorded 31 July 2026, against the real device (DMP-A6, firmware v1.5.90, 192.168.1.207).
 **What was actually observed, not what was expected.** Where something was not measured,
 it says so.
