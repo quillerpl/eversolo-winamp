@@ -62,4 +62,5 @@ docs/          the summaries — read these
 player/        the app; module map in docs/modules.md
 *.md at root   deep reference and history — read only when sent
 probe.py, enumerate.py, discover2.py    the API discovery tooling
+fetch-lyrics.py                         fills the library with .lrc sidecars over SMB
 ```

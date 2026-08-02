@@ -53,3 +53,23 @@ The device accepts `.m3u` files, returns success, and silently does nothing — 
 so the app parses them itself. Import resolves each line against the library and says what
 was dropped (missing files, web links, tracks not in the library) rather than quietly
 importing fewer tracks than the file listed.
+
+## Lyrics
+
+`fetch-lyrics.py` at the repo root fills the library with `.lrc` sidecar files, run from a
+Mac over the Eversolo's SMB share — no build, no install, no ADB, and it can be re-run and
+resumed. Lyrics come from [LRCLIB](https://lrclib.net): free, no account, no API key, run by
+volunteers for this purpose. The default pace is deliberate; do not lower it much.
+
+Measured on this library before writing anything:
+
+* 3,510 tracks, **0** `.lrc` files.
+* About two thirds of the FLACs already carry a `LYRICS` tag — and **none of it is timed**.
+  Sampling 300 files found 192 with lyrics and 0 with timestamps. Embedded tags give text;
+  they will never give the highlight.
+* LRCLIB had **time-synced** lyrics for 20 of 25 randomly chosen tracks.
+
+It never writes to an audio file. Undo is `find /Volumes/Share -name '*.lrc' -delete`.
+Matching is artist + title + album + duration, falling back to a search that only accepts a
+result within two seconds of the right length — which is what stops you getting the lyrics
+of a different recording of the same song.
