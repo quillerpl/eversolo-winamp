@@ -61,10 +61,25 @@ public final class SkinFinder {
         }
     }
 
+    /**
+     * The biggest a file may be and still be worth opening as a skin.
+     *
+     * Winamp skins are a handful of small bitmaps - the classic one is 100 KB. This limit
+     * exists because `.zip` is not a skin extension, it is *an* extension: the owner had a
+     * 128 MB Eversolo firmware OTA package in Downloads, and the app opened it, tried to read
+     * it into memory and died on startup. Extension alone is not enough evidence.
+     */
+    public static final long MAX_SKIN_BYTES = 20L * 1024 * 1024;
+
     public static boolean isSkin(File f) {
         if (f == null || !f.isFile()) return false;
         String n = f.getName().toLowerCase();
-        return n.endsWith(".wsz") || n.endsWith(".zip");
+        // macOS writes these alongside the real file when copying to a stick. They are
+        // metadata stubs, they carry the same name, and they are never a skin.
+        if (n.startsWith("._")) return false;
+        if (!n.endsWith(".wsz") && !n.endsWith(".zip")) return false;
+        long len = f.length();
+        return len > 0 && len <= MAX_SKIN_BYTES;
     }
 
     /** Breadth-first so that a skin near the top is found even if the walk is cut short. */

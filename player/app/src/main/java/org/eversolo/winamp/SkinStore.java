@@ -63,13 +63,13 @@ public final class SkinStore {
     public Skin load() {
         File c = chosen();
         if (c != null) {
-            Skin s = Skin.fromArchive(c);
-            if (s.isUsable()) return s;
+            Skin s = tryLoad(c);
+            if (s != null) return s;
             Logs.w(TAG, "chosen skin is not usable: " + c);
         }
         for (File f : findAll()) {
-            Skin s = Skin.fromArchive(f);
-            if (s.isUsable()) {
+            Skin s = tryLoad(f);
+            if (s != null) {
                 choose(f);              // first run with a skin already on the device
                 return s;
             }
@@ -77,6 +77,20 @@ public final class SkinStore {
         }
         Skin bundled = Skin.fromAssetArchive(ctx, "skins/base-2.91.wsz");
         return bundled != null && bundled.isUsable() ? bundled : null;
+    }
+
+    /**
+     * One candidate, or null. Nothing a file on someone's disk can do should stop the app
+     * starting - this is speculative parsing of files nobody promised anything about.
+     */
+    private Skin tryLoad(File f) {
+        try {
+            Skin s = Skin.fromArchive(f);
+            return s != null && s.isUsable() ? s : null;
+        } catch (Throwable t) {
+            Logs.w(TAG, "skin candidate " + f + " blew up, ignoring it: " + t);
+            return null;
+        }
     }
 
     /** Every `.wsz`/`.zip` on every volume, wherever it happens to be. */

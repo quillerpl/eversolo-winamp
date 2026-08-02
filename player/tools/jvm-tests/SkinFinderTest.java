@@ -1,6 +1,7 @@
 import org.eversolo.winamp.library.SkinFinder;
 
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -32,9 +33,14 @@ public class SkinFinderTest {
         return d;
     }
 
+    /**
+     * A believable skin-sized file. Not zero bytes: an empty file is not a skin and the
+     * finder rightly says so, which these fixtures have to respect or they test nothing.
+     */
     static void file(File parent, String name) throws Exception {
         File f = new File(parent, name);
         if (!f.createNewFile() && !f.isFile()) throw new IllegalStateException("touch " + f);
+        sparse(f, 100 * 1024);
     }
 
     static List<String> names(List<File> files) {
@@ -85,6 +91,32 @@ public class SkinFinderTest {
         check("past MAX_DEPTH is not found", names(r.skins).contains("too-deep.wsz"), false);
         check("at MAX_DEPTH is found", names(r.skins).contains("at-the-limit.wsz"), true);
 
+        System.out.println("\n=== the crash of 2 August: a firmware image is also a .zip ===");
+        // The owner had DMP-A6_R_v1.2.40_Beta_...ota-package.zip in Downloads. The app opened
+        // it because it ends in .zip, read it into memory and died with OutOfMemoryError on
+        // the main thread, before the first screen. Extension alone is not evidence.
+        File downloads = dir(internal, "Download");
+        File ota = new File(downloads, "DMP-A6_R_v1.2.40_Beta_202312291910_ota-package.zip");
+        sparse(ota, SkinFinder.MAX_SKIN_BYTES + 1);
+        // macOS leaves one of these next to the real file when you copy to a USB stick.
+        file(downloads, "._DMP-A6_R_v1.2.40_Beta_202312291910_ota-package.zip");
+        // ...and a genuine skin of a believable size, to be sure the filter is not just "no".
+        File real = new File(downloads, "hand-me-down.zip");
+        sparse(real, 120 * 1024);
+
+        r = SkinFinder.find(roots);
+        check("the firmware image is not a skin candidate", SkinFinder.isSkin(ota), false);
+        check("nor is the macOS ._ stub beside it",
+                names(r.skins).contains("._DMP-A6_R_v1.2.40_Beta_202312291910_ota-package.zip"),
+                false);
+        check("a normal-sized .zip still counts", SkinFinder.isSkin(real), true);
+        File empty = new File(downloads, "zero-bytes.wsz");
+        if (!empty.createNewFile() && !empty.isFile()) throw new IllegalStateException("touch");
+        check("an empty file does not", SkinFinder.isSkin(empty), false);
+        check("and a file that is not there does not", 
+                SkinFinder.isSkin(new File(downloads, "nope.wsz")), false);
+        check("the walk skips it too", names(r.skins).contains(ota.getName()), false);
+
         System.out.println("\n=== housekeeping ===");
         check("only .wsz and .zip count", SkinFinder.isSkin(new File(internal, "song.flac")), false);
         check("results are sorted", isSorted(r.skins), true);
@@ -105,6 +137,13 @@ public class SkinFinderTest {
             if (files.get(i - 1).compareTo(files.get(i)) > 0) return false;
         }
         return true;
+    }
+
+    /** A file of a given length without writing the bytes - the OTA was 128 MB. */
+    static void sparse(File f, long bytes) throws Exception {
+        try (RandomAccessFile raf = new RandomAccessFile(f, "rw")) {
+            raf.setLength(bytes);
+        }
     }
 
     static void deleteTree(File f) {

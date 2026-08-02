@@ -69,19 +69,37 @@ public final class Skin {
 
     // ---------------------------------------------------------------- loading
 
-    /** Load a .wsz / .zip archive. */
+    /** The largest a single file inside a skin may be before the archive is abandoned. */
+    private static final long MAX_ENTRY_BYTES = 8L * 1024 * 1024;
+
+    /** And the largest the whole thing may be, unpacked. */
+    private static final long MAX_TOTAL_BYTES = 40L * 1024 * 1024;
+
+    /** Load a .wsz / .zip archive. Never throws: an unreadable file is simply not a skin. */
     public static Skin fromArchive(File archive) {
         Skin s = new Skin();
         s.name = archive.getName();
         try (ZipInputStream zip = new ZipInputStream(new FileInputStream(archive))) {
             ZipEntry e;
+            long total = 0;
             while ((e = zip.getNextEntry()) != null) {
                 if (e.isDirectory()) continue;
-                s.consume(baseName(e.getName()), readAll(zip));
+                byte[] data = readAll(zip);
+                total += data.length;
+                if (total > MAX_TOTAL_BYTES) throw new TooBig("archive unpacks to over "
+                        + (MAX_TOTAL_BYTES / 1024 / 1024) + " MB");
+                s.consume(baseName(e.getName()), data);
                 zip.closeEntry();
             }
-        } catch (Exception ex) {
-            Logs.e(TAG, "could not read skin archive " + archive, ex);
+        } catch (TooBig big) {
+            // Expected for things that merely end in .zip. One line, no stack trace.
+            Logs.i(TAG, "not a skin, " + big.getMessage() + ": " + archive.getName());
+            return s;
+        } catch (Throwable ex) {
+            // Throwable, not Exception: this parses files nobody vouched for, and an
+            // OutOfMemoryError here used to take the whole app down on startup.
+            Logs.w(TAG, "could not read skin archive " + archive + ": " + ex);
+            return s;
         }
         Logs.i(TAG, "skin '" + s.name + "' loaded " + s.bitmaps.size() + " bitmaps"
                 + (s.isUsable() ? "" : "  (INCOMPLETE - missing main/cbuttons/titlebar)"));
@@ -140,8 +158,8 @@ public final class Skin {
                 s.consume(baseName(e.getName()), readAll(zip));
                 zip.closeEntry();
             }
-        } catch (Exception ex) {
-            Logs.e(TAG, "could not read bundled skin " + assetPath, ex);
+        } catch (Throwable ex) {
+            Logs.w(TAG, "could not read bundled skin " + assetPath + ": " + ex);
         }
         Logs.i(TAG, "bundled skin '" + s.name + "' loaded " + s.bitmaps.size() + " bitmaps"
                 + (s.isUsable() ? "" : "  (INCOMPLETE)"));
@@ -179,11 +197,31 @@ public final class Skin {
         return slash >= 0 ? p.substring(slash + 1) : p;
     }
 
+    /**
+     * Read one archive entry, refusing to grow past {@link #MAX_ENTRY_BYTES}.
+     *
+     * The limit is not paranoia. The app looks for skins by walking the user's storage, and
+     * on the owner's device it found a 128 MB Eversolo firmware OTA package sitting in
+     * Downloads, opened it because it ends in .zip, and died reading the first entry into a
+     * byte array. A skin is a handful of small bitmaps; nothing legitimate comes near this.
+     */
     private static byte[] readAll(InputStream in) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
         int n;
-        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        long total = 0;
+        while ((n = in.read(buf)) > 0) {
+            total += n;
+            if (total > MAX_ENTRY_BYTES) {
+                throw new TooBig("entry is over " + (MAX_ENTRY_BYTES / 1024) + " KB");
+            }
+            out.write(buf, 0, n);
+        }
         return out.toByteArray();
+    }
+
+    /** Thrown to abandon an archive that is clearly not a skin. Not an error worth a stack. */
+    private static final class TooBig extends Exception {
+        TooBig(String why) { super(why); }
     }
 }

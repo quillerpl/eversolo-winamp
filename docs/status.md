@@ -1,6 +1,6 @@
 # Status — what works, what is untested
 
-Current build **v1.0** (versionCode 30) — the first public release. With nothing playing, the title strip
+Current build **v1.0.1** (versionCode 31). With nothing playing, the title strip
 shows the running version; that is the quickest check that an install took.
 
 ## Working, confirmed on the device
