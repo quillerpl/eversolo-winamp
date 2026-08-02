@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
             Button b = new Button(this);
             b.setText(f.getName() + "\n" + f.getParent());
             b.setAllCaps(false);
+            b.setTypeface(Typeface.MONOSPACE);
             b.setOnClickListener(v -> { store.choose(f); launchOverlay(); });
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -150,7 +151,13 @@ public class MainActivity extends Activity {
         again.setOnClickListener(v -> buildSkinGate());
         box.addView(again);
 
+        // The scroller needs the black too: the content only paints as far as it reaches,
+        // and on a 2:1 screen this text fills about half the height. Without this the bottom
+        // half comes out white.
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Color.BLACK);
+        scroll.setFillViewport(true);
+        box.setGravity(Gravity.CENTER_VERTICAL);
         scroll.addView(box);
         setContentView(scroll);
         Logs.i(TAG, "skin gate shown, " + found.size() + " skin(s) found");

@@ -3,12 +3,34 @@
 A classic **Winamp 2.x** player for the **Eversolo DMP-A6**, running as a sideloaded
 Android app on the streamer's own 6-inch touchscreen.
 
-![The main window](docs/images/main-window.png)
+![The player running at 2160x1080](docs/images/on-device.png)
+
+*The player as it actually runs: the main window at ×7, 1925 × 812 on the DMP-A6's
+2160 × 1080 screen.*
 
 It does not play the audio itself. It drives the DMP-A6's built-in playback engine over the
 device's local HTTP API, which bypasses Android's sample-rate conversion and reaches the
 DACs bit-perfect. That is the whole point of the design: the stock engine still does all the
 audio, and this only replaces its face.
+
+## Tested on
+
+An **Eversolo DMP-A6**, `rockchip DMP-A6`, Android 11 (API 30), firmware **v1.5.90**, on its
+own 2160 × 1080 touchscreen. That is the only hardware this has ever run on. Other Eversolo
+models share the API family and may well work, but nobody has tried.
+
+## Getting a skin
+
+**Downloaded builds do not include one.** The player draws itself from a Winamp 2.x `.wsz`
+skin, and those are other people's artwork — the classic skin belongs to Winamp's owner and
+is not mine to hand out. See `THIRD-PARTY-NOTICES.md`.
+
+On first run the app asks for one. Grab a `.wsz` from
+[skins.webamp.org](https://skins.webamp.org) — there are tens of thousands — and put it on a
+USB stick or in `EverSoloWinamp/skins` on the device. Change it later from the **Winamp logo
+in the player's bottom-right corner**:
+
+![The skin chooser](docs/images/skin-chooser.png)
 
 > **This is a weekend project, built for fun and out of nostalgia.** One person, one
 > streamer, an undocumented API and a strong memory of what a music player used to look
