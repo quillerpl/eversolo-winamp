@@ -53,6 +53,8 @@ public final class BrowserWindowView extends View {
         void onZoom(int level);
         /** FULLSCR in the options fly-out: hide the device's side bar when idle. */
         void onFullScreen(boolean on);
+        /** MAIN x8: draw the main window one whole scale larger than fits, and crop it. */
+        void onOversize(boolean on);
     }
 
     /** Nothing of this row is in the playlist / some of it is / all of it is. */
@@ -178,6 +180,11 @@ public final class BrowserWindowView extends View {
 
     public void setFullScreen(boolean on) {
         zoom.setFullScreen(on);
+        invalidate();
+    }
+
+    public void setOversize(boolean on) {
+        zoom.setOversize(on);
         invalidate();
     }
 
@@ -539,6 +546,10 @@ public final class BrowserWindowView extends View {
                     boolean on = !zoom.isFullScreen();
                     zoom.setFullScreen(on);
                     callbacks.onFullScreen(on);
+                } else if (which == ZoomChooser.OVERSIZE) {
+                    boolean on = !zoom.isOversize();
+                    zoom.setOversize(on);
+                    callbacks.onOversize(on);
                 } else {
                     zoom.setCurrent(ZoomChooser.levelOf(which));
                     callbacks.onZoom(ZoomChooser.levelOf(which));

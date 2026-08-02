@@ -28,11 +28,16 @@ them.
 * **The window width is pinned, not left to the system.** `LAYOUT_HIDE_NAVIGATION` is inert
   on this firmware, so the window resized on every touch and re-scaled the whole UI with it.
   The measured full width is nailed down instead. See `windows.md`.
-* **The main window cannot fill the screen.** 2160 ÷ 275 = 7.85: ×7 is 1925 px and ×8 is
-  2200 px, 40 px too wide, and the clipped columns are frame artwork rather than margin
-  (checked — the outer columns of `main.bmp` carry 21–38 distinct colours each). Filling the
-  width exactly needs a fractional scale, which rule 6 forbids. The browser already fills
-  2160 and the playlist reaches 2100; it is only the main window that is short.
+* **The main window cannot fill the screen, and this is the format's doing, not ours.** The
+  playlist and the generic frame are built from a corner plus a repeating edge strip, which
+  is exactly why they stretch — the playlist in steps of 25 × 29, the browser to any size at
+  all. The main window is a single 275 × 116 picture. Checked, rather than assumed: **all 275
+  columns of `main.bmp` are distinct and no two adjacent rows or columns are identical**, so
+  there is no flat region a 9-patch could stretch and nowhere to put extra padding. Spreading
+  the elements apart would also have to be re-invented for every user `.wsz`.
+  2160 ÷ 275 = 7.85: ×7 is 1925 px, ×8 is 2200 px and crops 20 px off each side. Filling the
+  width exactly needs a fractional scale, which rule 6 forbids. **MAIN x8 exists so the owner
+  can judge the crop on the device**; it is provisional and comes out if rejected.
 * **Full screen is asked for, then verified — never assumed.** The firmware's side bar is
   almost certainly the navigation bar, but "almost certainly" is not shippable to a device
   with no debugger. `FullScreen` requests the hide without the full-bleed layout, watches for

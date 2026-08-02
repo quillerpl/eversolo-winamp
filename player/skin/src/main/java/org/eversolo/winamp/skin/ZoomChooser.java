@@ -26,7 +26,7 @@ public final class ZoomChooser {
     public static final String[] LABELS = {"x1", "x1.5", "x2"};
 
     /**
-     * The toggle is the <em>top</em> item, not the bottom one.
+     * The switches are the <em>top</em> items, not the bottom ones.
      *
      * The stack is drawn over the button that opened it, so whichever item is last sits
      * directly under the finger that just tapped - and a second tap in the same place fires
@@ -34,15 +34,19 @@ public final class ZoomChooser {
      * full screen is not, so the zoom levels keep the positions they have always had and the
      * toggle goes furthest away, where it has to be reached for.
      */
-    public static final int FULLSCREEN = 0;
+    public static final int OVERSIZE = 0;
+    public static final int FULLSCREEN = 1;
 
-    /** Zoom levels plus the toggle. */
-    public static final int ITEMS = LEVELS.length + 1;
+    /** How many items at the top are switches rather than zoom levels. */
+    public static final int TOGGLES = 2;
 
-    /** The zoom level an item stands for, or -1 for the toggle. */
-    public static int levelOf(int item) { return item - 1; }
+    /** Zoom levels plus the switches. */
+    public static final int ITEMS = LEVELS.length + TOGGLES;
 
-    private static final String FULLSCREEN_LABEL = "FULLSCR";
+    /** The zoom level an item stands for; negative for the switches. */
+    public static int levelOf(int item) { return item - TOGGLES; }
+
+    private static final String[] TOGGLE_LABELS = {"MAIN x8", "FULLSCR"};
 
     private final Rect src = new Rect();
     private final Rect dst = new Rect();
@@ -50,6 +54,7 @@ public final class ZoomChooser {
     private boolean open;
     private int current;
     private boolean fullScreen;
+    private boolean oversize;
 
     public boolean isOpen() { return open; }
     public void open() { open = true; }
@@ -60,6 +65,9 @@ public final class ZoomChooser {
 
     public boolean isFullScreen() { return fullScreen; }
     public void setFullScreen(boolean on) { fullScreen = on; }
+
+    public boolean isOversize() { return oversize; }
+    public void setOversize(boolean on) { oversize = on; }
 
     /** Item {@code i}, stacked upwards from the button that opened the chooser. */
     public PlaylistGeometry.Box item(PlaylistGeometry.Box anchor, int i) {
@@ -91,7 +99,10 @@ public final class ZoomChooser {
             PlaylistGeometry.Box b = item(anchor, i);
             // A zoom item is shown pressed when it is the one in force; the toggle is shown
             // pressed when full screen is on. Same idea, so it reads the same way.
-            boolean selected = i == FULLSCREEN ? fullScreen : levelOf(i) == current;
+            boolean selected;
+            if (i == OVERSIZE)        selected = oversize;
+            else if (i == FULLSCREEN) selected = fullScreen;
+            else                      selected = levelOf(i) == current;
             SkinSprites.Rect r = GenSprites.src(
                     (selected || i == pressed) ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON");
             if (r == null) continue;
@@ -102,7 +113,7 @@ public final class ZoomChooser {
             text.setColor(0xFF101010);
             text.setTextAlign(Paint.Align.CENTER);
             float baseline = b.y + (b.h - (fm.descent - fm.ascent)) / 2f - fm.ascent;
-            c.drawText(i == FULLSCREEN ? FULLSCREEN_LABEL : LABELS[levelOf(i)],
+            c.drawText(i < TOGGLES ? TOGGLE_LABELS[i] : LABELS[levelOf(i)],
                     b.x + b.w / 2f, baseline, text);
         }
         text.setTextAlign(Paint.Align.LEFT);

@@ -41,11 +41,13 @@ public class PlaylistGeometryTest {
                 dir, "skin/src/main/java/org/eversolo/winamp/skin/ZoomChooser.java")));
         Matcher m = Pattern.compile("LEVELS\\s*=\\s*\\{([^}]*)\\}").matcher(src);
         if (!m.find()) throw new IllegalStateException("ZoomChooser.LEVELS not found");
-        if (!src.contains("ITEMS = LEVELS.length + 1")) {
+        Matcher t = Pattern.compile("TOGGLES\\s*=\\s*(\\d+)").matcher(src);
+        if (!t.find()) throw new IllegalStateException("ZoomChooser.TOGGLES not found");
+        if (!src.contains("ITEMS = LEVELS.length + TOGGLES")) {
             throw new IllegalStateException(
-                    "ZoomChooser.ITEMS is no longer LEVELS + 1 - update this test");
+                    "ZoomChooser.ITEMS is no longer LEVELS + TOGGLES - update this test");
         }
-        return m.group(1).split(",").length + 1;
+        return m.group(1).split(",").length + Integer.parseInt(t.group(1));
     }
 
     public static void main(String[] args) throws Exception {
@@ -219,7 +221,7 @@ public class PlaylistGeometryTest {
         // button higher. At x2 the windows are at their shortest, which is where it would
         // run off the top first - and 2160 is what the full-screen mode asks for.
         final int ITEMS = flyoutItems();
-        check("fly-out items (zoom levels + FULLSCR)", ITEMS, 4);
+        check("fly-out items (zoom levels + MAIN x8 + FULLSCR)", ITEMS, 5);
         for (int screenW : new int[]{2000, 2160}) {
             for (float z : new float[]{1f, 1.5f, 2f}) {
                 int s2 = WindowScales.zoomed(screenW, SH, WANTED, z);
@@ -235,6 +237,20 @@ public class PlaylistGeometryTest {
                         btop >= GenSprites.TITLE_H, true);
             }
         }
+
+        System.out.println("\n=== MAIN x8: one step past what fits, and what it costs ===");
+        // The point of the switch is to show the crop, so the crop had better be right.
+        check("x7 is what fits on the full screen", WindowScales.main(2160, SH), 7);
+        check("oversize goes to x8", WindowScales.mainOversized(2160, SH), 8);
+        check("x8 is 2200px wide", 275 * 8, 2200);
+        check("20px off each side at 2160", WindowScales.cropPerSide(2160, 8), 20);
+        check("nothing cropped at x7", WindowScales.cropPerSide(2160, 7), 0);
+        check("100px off each side if the side bar is still there",
+                WindowScales.cropPerSide(2000, 8), 100);
+        // 116*9 = 1044 fits 1080, but 116*10 = 1160 does not - so a taller screen must not
+        // be talked into a scale that crops the window top and bottom as well.
+        check("refuses a step that would overflow vertically",
+                WindowScales.mainOversized(4000, 1080), WindowScales.main(4000, 1080));
 
         System.out.println("\n=== shared list arithmetic ===");
         check("nothing to scroll", ListMath.maxOffset(5, 15), 0);

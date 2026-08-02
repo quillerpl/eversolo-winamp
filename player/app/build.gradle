@@ -13,8 +13,8 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 24
-        versionName "0.24-nojump"
+        versionCode 25
+        versionName "0.25-mainx8"
     }
     buildTypes {
         debug { minifyEnabled false }

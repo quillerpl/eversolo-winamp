@@ -67,6 +67,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private static final String PREF_VIS = "visualiser";
     private static final String PREF_REMAINING = "timeRemaining";
     private static final String PREF_FULLSCREEN = "fullScreen";
+    private static final String PREF_OVERSIZE = "mainOversize";
 
     /** Visualiser animation frame. The device is polled slower; this smooths between. */
     private static final long VIS_FRAME_MS = 40;
@@ -108,6 +109,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean visAnimating = false;
     private boolean restoredPlaylist = false;
     private boolean fullScreenOn = false;
+    private boolean oversizeOn = false;
     private String fullScreenVerdict;
     private long fullScreenVerdictAt;
     private final Runnable savePlaylist = new Runnable() {
@@ -125,6 +127,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 .getBoolean(PREF_VIS, true);
         this.fullScreenOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getBoolean(PREF_FULLSCREEN, false);
+        this.oversizeOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_OVERSIZE, false);
         // First line in the log, so "which build is actually running?" is never a guess
         // again - the last install silently did not replace the app.
         Logs.i(TAG, "EversoloWinamp " + version + " starting");
@@ -228,7 +232,9 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         this.fullScreen = fs;
         playlistWindow.setFullScreen(fullScreenOn);
         browserWindow.setFullScreen(fullScreenOn);
-        fs.setReport(this::reportFullScreen);
+        playlistWindow.setOversize(oversizeOn);
+        browserWindow.setOversize(oversizeOn);
+        fs.setReport(this::report);
         fs.setEnabled(fullScreenOn);
     }
 
@@ -238,7 +244,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * that can show a message, and it is kept for the next time the main window comes up -
      * this is the one message in the app that answers a question the user actually asked.
      */
-    private void reportFullScreen(String line) {
+    private void report(String line) {
         ui.post(() -> {
             fullScreenVerdict = line;
             fullScreenVerdictAt = System.currentTimeMillis();
@@ -248,7 +254,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     }
 
     /** Re-show the verdict if the main window came back while it was still worth reading. */
-    private void replayFullScreenVerdict() {
+    private void replayVerdict() {
         if (fullScreenVerdict == null) return;
         if (System.currentTimeMillis() - fullScreenVerdictAt > VERDICT_WORTH_REPEATING_MS) {
             fullScreenVerdict = null;
@@ -256,6 +262,26 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         }
         mainWindow.flashTitle(fullScreenVerdict);
         fullScreenVerdict = null;
+    }
+
+    /**
+     * MAIN x8, from either window. Draws the main window one whole scale larger than fits
+     * and lets the screen crop it, so the cost can be looked at rather than argued about.
+     * The amount lost is reported, because that is the whole question.
+     */
+    private void setOversize(boolean on) {
+        oversizeOn = on;
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_OVERSIZE, on).apply();
+        playlistWindow.setOversize(on);
+        browserWindow.setOversize(on);
+        relayout();
+        int crop = WindowScales.cropPerSide(laidOutW, mainScale);
+        report("MAIN x" + mainScale + " - " + (crop > 0
+                ? "CROPS " + crop + "PX EACH SIDE" : "FITS, NO CROP"));
+        Logs.i(TAG, "main window oversize " + (on ? "on" : "off") + ": x" + mainScale
+                + " = " + (SkinSprites.WINDOW_W * mainScale) + "px in " + laidOutW
+                + "px, " + crop + "px off each side");
     }
 
     /** FULLSCR, from either window. Applies to both, and is remembered. */
@@ -377,7 +403,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
      * that still shows WANTED_ROWS wins, so on a bigger screen it simply gets bigger.
      */
     private void computeScales(int w, int h) {
-        mainScale = WindowScales.main(w, h);
+        mainScale = oversizeOn ? WindowScales.mainOversized(w, h) : WindowScales.main(w, h);
         // The zoom setting multiplies the natural scale. Whole numbers only - these are
         // pixel art - so x1.5 of a x4 window means drawing it at x6: same window, bigger
         // everything, fewer rows.
@@ -409,7 +435,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
         updateVisualiser();
-        if (main) replayFullScreenVerdict();
+        if (main) replayVerdict();
     }
 
     private void openPlaylist() {
@@ -832,6 +858,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onZoom(int level) { setZoom(level); }
 
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
+
+        @Override public void onOversize(boolean on) { setOversize(on); }
     }
 
     // ---------------------------------------------------------------- browser window
@@ -847,6 +875,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onZoom(int level) { setZoom(level); }
 
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
+
+        @Override public void onOversize(boolean on) { setOversize(on); }
     }
 
     /** What the browser model needs from the app: the playlist, and somewhere to shout. */

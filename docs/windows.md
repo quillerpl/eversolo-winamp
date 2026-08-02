@@ -45,7 +45,7 @@ behind a long-press and regretting it.
 side bar five seconds after the last touch and brings it straight back on the next one — a
 touch anywhere, not a swipe, so rule 7 holds. It is remembered between runs and defaults off.
 
-It is the **top** item, above x1. The fly-out is drawn over the button that opened it, so the
+It is the **second** item, below MAIN x8 and above x1. The fly-out is drawn over the button that opened it, so the
 bottom item sits under the finger that just tapped and a second tap fires it. That has always
 been true of x2; x2 is a survivable accident and silently going full screen is not, so the
 zoom levels keep the positions they have always had.
@@ -74,6 +74,12 @@ bar is briefly visible — otherwise the whole layout would re-scale twice on ev
 
 The main window does not get bigger (×7 either way, 1925 × 812) — it just stops sitting 80 px
 left of the screen's real centre. The playlist goes 2000 → 2100 px and the browser fills 2160.
+
+**MAIN x8** is the switch above it, and it is a question rather than a feature. 2160 ÷ 275 =
+7.85, so the main window is stuck at ×7 with 117 px of black each side, and ×8 is 2200 px —
+40 px too wide. The switch draws it at ×8 anyway and lets the screen crop 20 px off each edge,
+so the cost can be looked at rather than argued about. It reports what it lost. If the owner
+does not like it, the switch and `WindowScales.mainOversized` come out together.
 
 ## Feedback
 

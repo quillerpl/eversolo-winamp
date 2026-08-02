@@ -21,6 +21,25 @@ public final class WindowScales {
     }
 
     /**
+     * One whole step past what fits, so the owner can see what a wider main window would
+     * cost. The window is then drawn larger than the screen and cropped equally on both
+     * sides - 275x8 is 2200 px against this device's 2160, so 20 px goes off each edge.
+     *
+     * Refuses to go up a step if that would also overflow vertically: cropping top and
+     * bottom as well answers a different question from the one being asked.
+     */
+    public static int mainOversized(int screenW, int screenH) {
+        int fits = main(screenW, screenH);
+        int bigger = fits + 1;
+        return SkinSprites.WINDOW_H * bigger <= screenH ? bigger : fits;
+    }
+
+    /** How much of an oversized main window falls off each side, in screen pixels. */
+    public static int cropPerSide(int screenW, int scale) {
+        return Math.max(0, (SkinSprites.WINDOW_W * scale - screenW) / 2);
+    }
+
+    /**
      * The scale the playlist would take on its own: the largest that still shows
      * {@code wantedRows} tracks. Falls back to x1, which shows the most rows of all.
      */
