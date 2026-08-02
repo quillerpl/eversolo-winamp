@@ -54,7 +54,13 @@ zoom levels keep the positions they have always had.
 work. It asks for the bar to go **without** also asking for a full-bleed layout, so that a
 refusal leaves nothing drawn underneath the bar; only once the window is seen to grow past its
 old width does it take the extra space for good. If the window has not grown after 2.5 s it
-puts every flag back and logs why. Once proven, the window stays 2160 px wide even while the
+puts every flag back, says so in the title strip and ships the log.
+
+It asks **twice, by two different mechanisms**. `SYSTEM_UI_FLAG_HIDE_NAVIGATION` is computed
+by the system from the top *application* window, and `TYPE_APPLICATION_OVERLAY` sits well
+above the application range — which is the likeliest reason v0.22 was ignored outright on the
+device. `WindowInsetsController` (API 30, which this device runs) routes through the *focused*
+window instead, and an overlay can be that. Neither is trusted; the window growing is. Once proven, the window stays 2160 px wide even while the
 bar is briefly visible — otherwise the whole layout would re-scale twice on every touch.
 
 The main window does not get bigger (×7 either way, 1925 × 812) — it just stops sitting 80 px

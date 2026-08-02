@@ -1,10 +1,13 @@
 package org.eversolo.winamp;
 
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 
+import org.eversolo.winamp.core.LogShipper;
 import org.eversolo.winamp.core.Logs;
 
 /**
@@ -60,8 +63,12 @@ public final class FullScreen {
     /** The one flag that actually hides anything. */
     private static final int HIDE = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
 
+    /** Somewhere to say what happened, drawn in a window - a Toast would be invisible. */
+    public interface Report { void say(String line); }
+
     private final View host;
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private Report report;
     private final Runnable hideSoon = this::hideNow;
     private final Runnable giveUp = this::concludeRefused;
 
@@ -83,6 +90,10 @@ public final class FullScreen {
             if ((visibility & HIDE) == 0) restartIdleTimer();
         });
     }
+
+    public void setReport(Report r) { this.report = r; }
+
+    private void say(String line) { if (report != null) report.say(line); }
 
     public boolean isEnabled() { return enabled; }
 
@@ -108,7 +119,7 @@ public final class FullScreen {
     /** Called for every touch that reaches the player. Brings the bar back immediately. */
     public void onUserTouch() {
         if (!enabled || refused) return;
-        if (proven) host.setSystemUiVisibility(LAYOUT_FULL);
+        if (proven) requestShow();
         restartIdleTimer();
     }
 
@@ -120,13 +131,39 @@ public final class FullScreen {
     // ------------------------------------------------------------------ the proof
 
     private void begin() {
-        // Note what is missing: LAYOUT_HIDE_NAVIGATION. If the firmware refuses, the window
+        requestHide();
+        ui.postDelayed(giveUp, VERIFY_MS);
+        Logs.i(TAG, "asking for the side bar to be hidden; " + diag());
+    }
+
+    /**
+     * Two mechanisms, because v0.22 proved the old one alone is not enough here.
+     *
+     * The SYSTEM_UI_FLAG_* route is computed by the system from the top <em>application</em>
+     * window. TYPE_APPLICATION_OVERLAY is not one - it sits well above the application range
+     * - so the flags this window sets are the most likely thing to have been ignored
+     * outright. WindowInsetsController, new in API 30 and what this device runs, routes
+     * through the <em>focused</em> window instead, which an overlay can be.
+     *
+     * Both are asked. Neither is trusted: what counts is still whether the window grows.
+     */
+    private void requestHide() {
+        // Note what is missing: LAYOUT_HIDE_NAVIGATION. If the request is refused, the window
         // stays 2000 px and the bar keeps its own space, rather than sitting on top of the
         // playlist's right-hand edge until someone notices.
-        host.setSystemUiVisibility(LAYOUT | HIDE);
-        ui.postDelayed(giveUp, VERIFY_MS);
-        Logs.i(TAG, "asking for the side bar to be hidden; window is "
-                + barredWidth + "px wide, insets " + insets());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController c = host.getWindowInsetsController();
+            if (c != null) c.hide(WindowInsets.Type.navigationBars());
+        }
+        host.setSystemUiVisibility((proven ? LAYOUT_FULL : LAYOUT) | HIDE);
+    }
+
+    private void requestShow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController c = host.getWindowInsetsController();
+            if (c != null) c.show(WindowInsets.Type.navigationBars());
+        }
+        host.setSystemUiVisibility(proven ? LAYOUT_FULL : LAYOUT);
     }
 
     /**
@@ -139,7 +176,7 @@ public final class FullScreen {
 
         if (barredWidth == 0) {
             barredWidth = width;
-            Logs.i(TAG, "window with the side bar in place: " + width + "px, insets " + insets());
+            Logs.i(TAG, "window with the side bar in place: " + width + "px, " + diag());
             if (enabled) host.post(this::begin);
             return;
         }
@@ -155,17 +192,23 @@ public final class FullScreen {
         host.post(() -> {
             host.setSystemUiVisibility(LAYOUT_FULL | HIDE);
             Logs.i(TAG, "side bar hidden: window " + barredWidth + " -> " + grownTo
-                    + "px, insets " + insets());
+                    + "px, " + diag());
+            say("FULLSCREEN ON - " + grownTo + "PX");
+            LogShipper.shipBuffer();
         });
     }
 
     private void concludeRefused() {
         if (proven || !enabled) return;
         refused = true;
+        requestShow();
         host.setSystemUiVisibility(0);
-        Logs.w(TAG, "the firmware would not hide the side bar - window still "
-                + barredWidth + "px after " + VERIFY_MS + "ms, insets " + insets()
-                + "; leaving the player as it was");
+        Logs.w(TAG, "the side bar would not go - window still " + barredWidth + "px after "
+                + VERIFY_MS + "ms, " + diag() + "; leaving the player as it was");
+        // Everything needed to tell the three possible causes apart is in that one line, so
+        // put it where it can be read: on the screen, and on the dev machine if it is there.
+        say("NO FULLSCR " + diag());
+        LogShipper.shipBuffer();
     }
 
     // ------------------------------------------------------------------ hide / show
@@ -177,18 +220,33 @@ public final class FullScreen {
 
     private void hideNow() {
         if (!enabled || refused) return;
-        host.setSystemUiVisibility((proven ? LAYOUT_FULL : LAYOUT) | HIDE);
+        requestHide();
     }
 
     /**
-     * What the system says it is reserving around us. Logged rather than acted on: if this
-     * ever ships and does nothing, this line is the first thing to read off the console,
-     * because it says whether the 160 px is a system bar at all.
+     * The four numbers that tell the possible causes apart, short enough for the title strip:
+     *
+     * <ul>
+     *   <li><b>W</b> - the window width right now. Still 2000 means we never got the space.</li>
+     *   <li><b>R</b> - what the system reserves on the right. 160 means something really is
+     *       claiming that strip; 0 means the 160 px is not an inset at all and no flag will
+     *       ever move it.</li>
+     *   <li><b>NAV</b> - how much of that R is the navigation bar specifically. R=160 with
+     *       NAV=0 means the strip is some other kind of bar, which is a different problem.</li>
+     *   <li><b>F</b> - whether this window has focus. Without it, both mechanisms are asking
+     *       on behalf of a window the system is not listening to.</li>
+     * </ul>
      */
-    private String insets() {
+    private String diag() {
         WindowInsets w = host.getRootWindowInsets();
-        if (w == null) return "unknown";
-        return "l=" + w.getSystemWindowInsetLeft() + " t=" + w.getSystemWindowInsetTop()
-                + " r=" + w.getSystemWindowInsetRight() + " b=" + w.getSystemWindowInsetBottom();
+        int right = -1, nav = -1;
+        if (w != null) {
+            right = w.getSystemWindowInsetRight();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                nav = w.getInsets(WindowInsets.Type.navigationBars()).right;
+            }
+        }
+        return "W" + host.getWidth() + " R" + right + " NAV" + nav
+                + " F" + (host.hasWindowFocus() ? "Y" : "N");
     }
 }

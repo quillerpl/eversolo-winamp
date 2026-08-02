@@ -71,6 +71,9 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     /** Visualiser animation frame. The device is polled slower; this smooths between. */
     private static final long VIS_FRAME_MS = 40;
 
+    /** How long a full-screen verdict stays worth re-showing when the main window returns. */
+    private static final long VERDICT_WORTH_REPEATING_MS = 120_000;
+
     private final Context ctx;
     private final Runnable onQuit;
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -105,6 +108,8 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean visAnimating = false;
     private boolean restoredPlaylist = false;
     private boolean fullScreenOn = false;
+    private String fullScreenVerdict;
+    private long fullScreenVerdictAt;
     private final Runnable savePlaylist = new Runnable() {
         @Override public void run() { if (store != null) store.save(playlist); }
     };
@@ -223,7 +228,34 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         this.fullScreen = fs;
         playlistWindow.setFullScreen(fullScreenOn);
         browserWindow.setFullScreen(fullScreenOn);
+        fs.setReport(this::reportFullScreen);
         fs.setEnabled(fullScreenOn);
+    }
+
+    /**
+     * The verdict arrives about two and a half seconds after the button is tapped, by which
+     * time the user may have closed the window they tapped it in. So it goes to both windows
+     * that can show a message, and it is kept for the next time the main window comes up -
+     * this is the one message in the app that answers a question the user actually asked.
+     */
+    private void reportFullScreen(String line) {
+        ui.post(() -> {
+            fullScreenVerdict = line;
+            fullScreenVerdictAt = System.currentTimeMillis();
+            mainWindow.flashTitle(line);
+            browserWindow.flash(line);
+        });
+    }
+
+    /** Re-show the verdict if the main window came back while it was still worth reading. */
+    private void replayFullScreenVerdict() {
+        if (fullScreenVerdict == null) return;
+        if (System.currentTimeMillis() - fullScreenVerdictAt > VERDICT_WORTH_REPEATING_MS) {
+            fullScreenVerdict = null;
+            return;
+        }
+        mainWindow.flashTitle(fullScreenVerdict);
+        fullScreenVerdict = null;
     }
 
     /** FULLSCR, from either window. Applies to both, and is remembered. */
@@ -377,6 +409,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         mainWindow.setFocused(main);
         playlistWindow.setFocused(playlistWin);
         updateVisualiser();
+        if (main) replayFullScreenVerdict();
     }
 
     private void openPlaylist() {
