@@ -26,6 +26,8 @@ audio, and this only replaces its face.
 ## Download and install
 
 **[Download the latest version](https://github.com/quillerpl/eversolo-winamp/releases/latest)**
+&nbsp;·&nbsp; **[Read the Wiki](https://github.com/quillerpl/eversolo-winamp/wiki)** — a
+plain-English guide to everything the player does, with pictures.
 
 Every version, with notes on what changed, is on the
 [Releases page](https://github.com/quillerpl/eversolo-winamp/releases).
@@ -136,6 +138,8 @@ would be no feedback at all.
 
 ### Lyrics
 
+*Full guide: **[Lyrics](https://github.com/quillerpl/eversolo-winamp/wiki/Lyrics)** in the Wiki.*
+
 **Tap the song title** on the main window and the words appear, with the line being sung
 drawn at twice the size in bold and held in the middle of the window while the rest scroll
 past — the arrangement the streaming services use. Tap the title again to close it.
@@ -160,6 +164,13 @@ Lines wrap rather than truncate, because half a lyric is worse than none. Where 
 lyrics exist, they are shown without a highlight and the window says so.
 
 ---
+
+## Documentation
+
+| For | Read |
+|---|---|
+| Using the player | the **[Wiki](https://github.com/quillerpl/eversolo-winamp/wiki)** — plain English, with pictures |
+| Working on the code | `docs/00-index.md`, which points at the one file that answers your question |
 
 ## Why it is built the way it is
 
