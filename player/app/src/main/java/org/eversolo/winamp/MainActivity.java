@@ -52,6 +52,15 @@ public class MainActivity extends Activity {
     private WinampUi inlineUi;      // only used in fallback mode
     private FullScreen inlineFullScreen;
     private boolean fallbackMode = false;
+    /**
+     * True between asking for permissions and hearing back.
+     *
+     * Without it, onResume runs straight after onCreate, sees that reading is allowed, starts
+     * the overlay and calls finish() - taking the permission dialog down with the activity
+     * before it can be read, let alone answered. It only appeared to work on an emulator with
+     * no skin installed, where the activity stayed up for the skin gate.
+     */
+    private boolean awaitingPermissions = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +75,7 @@ public class MainActivity extends Activity {
         // every existing install read was already granted, this test was false, and the
         // request never ran - the app asked for nothing and then could not save anything.
         if (!hasStorage() || !canWriteStorage()) {
+            awaitingPermissions = true;
             requestPermissions(new String[]{
                     Manifest.permission.READ_EXTERNAL_STORAGE,
                     Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
@@ -76,6 +86,12 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (fallbackMode) return;
+        if (awaitingPermissions) return;      // the dialog is up; do not finish underneath it
+        proceed();
+    }
+
+    /** Whatever comes next, once nothing is being waited on. */
+    private void proceed() {
         if (!hasStorage() || !OverlayService.canDraw(this)) { updateGate(); return; }
         // The player draws itself from a Winamp skin and release builds carry none - the
         // classic one is Nullsoft's artwork, not ours to hand out. Without one there is
@@ -87,7 +103,11 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int req, String[] p, int[] granted) {
-        updateGate();
+        // Whatever the answer, stop waiting. Writing is optional - refused, lyrics are saved
+        // inside the app instead - so a "no" must not leave the player stuck on the gate.
+        awaitingPermissions = false;
+        Logs.i(TAG, "storage permissions: read=" + hasStorage() + " write=" + canWriteStorage());
+        proceed();
     }
 
     /** Reading is what the player needs to run at all. */

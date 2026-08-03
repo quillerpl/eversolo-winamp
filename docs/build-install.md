@@ -48,3 +48,19 @@ owner to read a screen. See `api.md`.
 
 And before reaching for the device at all, see `testing.md` — most things can be proved on
 the laptop.
+
+## Asking for a permission from this activity
+
+`MainActivity` finishes itself the moment it has what it needs — the overlay is the interface
+from then on. That makes it a bad place to ask for anything: `onCreate` fires the request,
+`onResume` runs immediately after, sees it can read, starts the overlay and calls `finish()`,
+and the permission dialog goes down with the activity before it can be answered.
+
+It cost three builds to find, because it only shows on a device that has everything else
+already: on a fresh install the activity stays up for the skin gate and the dialog survives,
+so the emulator said it worked. `awaitingPermissions` now holds the activity open until the
+answer arrives.
+
+**If you ever add another runtime permission, reproduce the upgrade case, not the fresh one.**
+Existing installs are the ones where the new thing is missing and everything else is granted.
+
