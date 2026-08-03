@@ -1,6 +1,6 @@
 # Status — what works, what is untested
 
-Current build **v1.3.5-buttons** (versionCode 39). With nothing playing, the title strip
+Current build **v1.4-sidebar** (versionCode 40). With nothing playing, the title strip
 shows the running version; that is the quickest check that an install took.
 
 ## Working, confirmed on the device

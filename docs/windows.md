@@ -111,8 +111,15 @@ fill a panel but never move the highlight.
 ## Full screen
 
 **FULLSCR**, in the same fly-out as the zoom in both scrolling windows, hides the device's
-side bar five seconds after the last touch and brings it straight back on the next one — a
-touch anywhere, not a swipe, so rule 7 holds. It is remembered between runs and defaults off.
+side bar five seconds after the last touch. A touch anywhere brings it back — a touch, never a
+swipe, so rule 7 holds — but **a second later, not instantly**, and every further touch pushes
+that second out again. It is remembered between runs and defaults off.
+
+The delay is not a flourish. The window stays pinned at the full width, so the bar returns *on
+top of* the player's right-hand edge: the EQ and PL buttons and the logo that opens the skins.
+Returning the instant anything was touched put it over the very controls being reached for.
+With the delay, the bar never appears at all while the player is actually being used; it
+arrives a second after you stop.
 
 It is the **second** item, below MAIN x8 and above x1. The fly-out is drawn over the button that opened it, so the
 bottom item sits under the finger that just tapped and a second tap fires it. That has always

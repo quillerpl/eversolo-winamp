@@ -51,6 +51,17 @@ public final class FullScreen {
     /** How long the screen must go untouched before the bar is hidden again. */
     private static final long IDLE_MS = 5_000;
 
+    /**
+     * How long a touch waits before the bar comes back.
+     *
+     * Not a flourish. The window is pinned at the full width, so the bar returns *on top of*
+     * the player's right-hand edge - the EQ and PL buttons and the logo that opens the skins.
+     * Bringing it back the instant you touch anything put it over the very controls you were
+     * reaching for. Each touch pushes this out again, so while you are actually using the
+     * player the bar never appears at all; it arrives a second after you stop.
+     */
+    private static final long SHOW_AFTER_MS = 1_000;
+
     /** How long to wait for the window to grow before concluding the firmware said no. */
     private static final long VERIFY_MS = 2_500;
 
@@ -85,6 +96,7 @@ public final class FullScreen {
     private WindowSizer sizer;
     private Space space;
     private final Runnable hideSoon = this::hideNow;
+    private final Runnable showSoon = this::showNow;
     private final Runnable giveUp = this::concludeRefused;
 
     /** The window's width with the bar in place - measured, never assumed. */
@@ -139,6 +151,7 @@ public final class FullScreen {
         if (enabled == on) return;
         enabled = on;
         ui.removeCallbacks(hideSoon);
+        ui.removeCallbacks(showSoon);
         ui.removeCallbacks(giveUp);
         if (on) {
             refused = false;        // an explicit switch-on always gets a fresh try
@@ -154,15 +167,25 @@ public final class FullScreen {
         }
     }
 
-    /** Called for every touch that reaches the player. Brings the bar back immediately. */
+    /** Called for every touch that reaches the player. The bar follows a second later. */
     public void onUserTouch() {
         if (!enabled || refused) return;
-        if (proven) { requestShow(); publishSpace(true); }
+        if (proven) {
+            ui.removeCallbacks(showSoon);
+            ui.postDelayed(showSoon, SHOW_AFTER_MS);
+        }
         restartIdleTimer();
+    }
+
+    private void showNow() {
+        if (!enabled || refused || !proven) return;
+        requestShow();
+        publishSpace(true);
     }
 
     public void destroy() {
         ui.removeCallbacks(hideSoon);
+        ui.removeCallbacks(showSoon);
         ui.removeCallbacks(giveUp);
     }
 
@@ -266,8 +289,11 @@ public final class FullScreen {
         ui.postDelayed(hideSoon, IDLE_MS);
     }
 
+    /** Hiding cancels any pending return, or the bar reappears a second after going. */
+
     private void hideNow() {
         if (!enabled || refused) return;
+        ui.removeCallbacks(showSoon);
         requestHide();
         publishSpace(false);
     }
