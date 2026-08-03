@@ -492,6 +492,22 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         return skins.load();
     }
 
+    /**
+     * SONG/FILE in the options fly-out: the title strip shows the tags or the file name.
+     *
+     * This used to be what tapping the title did. It lost that seat to the lyrics, which is
+     * the right trade - one is a thing you do constantly, the other is a preference you set
+     * once - but it is still worth having, so it moved rather than went.
+     */
+    private void toggleTitleMode() {
+        showFileName = !showFileName;
+        mainWindow.setNowPlaying(nowPlayingText(engine.state()),
+                engine.state().positionMs, engine.state().durationMs,
+                engine.state().isPlaying(),
+                engine.state().status == PlaybackState.Status.PAUSED);
+        Logs.i(TAG, "title shows " + (showFileName ? "the file name" : "the tags"));
+    }
+
     // ---------------------------------------------------------------- lyrics
 
     /** LYRICS in the options fly-out. */
@@ -977,14 +993,12 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onLogo() { openSkins(); }
 
+        /** The song title. Big, obvious, already about the song: the place to find the words. */
         @Override public void onToggleTitleMode() {
-            showFileName = !showFileName;
-            mainWindow.setNowPlaying(nowPlayingText(engine.state()),
-                    engine.state().positionMs, engine.state().durationMs,
-                    engine.state().isPlaying(),
-                    engine.state().status == PlaybackState.Status.PAUSED);
-            Logs.i(TAG, "title shows " + (showFileName ? "the file name" : "the tags"));
+            if (lyricsOpen) closeLyrics(); else openLyrics();
         }
+
+
 
         @Override public void onToggleVisualiser() {
             boolean on = !mainWindow.isVisualiserOn();
@@ -1098,7 +1112,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onOversize(boolean on) { setOversize(on); }
 
-        @Override public void onLyrics() { openLyrics(); }
+        @Override public void onTitleMode() { toggleTitleMode(); }
     }
 
     // ---------------------------------------------------------------- browser window
@@ -1117,7 +1131,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
 
         @Override public void onOversize(boolean on) { setOversize(on); }
 
-        @Override public void onLyrics() { openLyrics(); }
+        @Override public void onTitleMode() { toggleTitleMode(); }
     }
 
     /** The same window as the browser, pointed at skin files instead of music. */
@@ -1132,7 +1146,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         @Override public void onFullScreen(boolean on) { setFullScreen(on); }
         @Override public void onOversize(boolean on) { setOversize(on); }
 
-        @Override public void onLyrics() { openLyrics(); }
+        @Override public void onTitleMode() { toggleTitleMode(); }
     }
 
     /** What the browser model needs from the app: the playlist, and somewhere to shout. */

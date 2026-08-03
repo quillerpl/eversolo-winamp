@@ -43,13 +43,19 @@ behind a long-press and regretting it.
 * **Browser:** tapping a folder or album opens it, tapping a track selects it, ADD puts the
   selection in the playlist — or everything listed, if nothing is selected. That second rule
   makes "add this whole album" one tap.
-* **Main window:** the X quits, the clock toggles elapsed/remaining, the title toggles
-  tags/file name, the little LCD toggles the analyser, and a long press on the title bar
-  opens the log console.
+* **Main window:** the X quits, the clock toggles elapsed/remaining, **the title opens the
+  lyrics**, the little LCD toggles the analyser, and a long press on the title bar opens the
+  log console. Tags vs file name moved to SONG/FILE in the options fly-out.
 
 ## Lyrics
 
-**LYRICS**, the top item of the MISC OPTS fly-out, opens the words for whatever is playing,
+**Tap the song title** on the main window and the words open; tap it again and they close. It
+is the biggest thing on the window and it is already about the song, so it is where a person
+looks — buried in a fly-out among the zoom levels, nobody found it. The tags/file-name toggle
+that used to live on that tap moved into the fly-out as SONG/FILE: one is something you do
+constantly, the other a preference you set once.
+
+The window shows the words for whatever is playing,
 with the line being sung drawn at twice the size in bold and held in the middle of the window
 while the rest scroll past — the streaming-service arrangement.
 
@@ -67,6 +73,11 @@ Two things make it feel right rather than cheap:
   trick the visualiser uses.
 * **The scroll eases** rather than jumping, covering a fifth of the remaining distance each
   frame. A jump on every line change reads as a flicker.
+* **Lines wrap, they are never truncated.** At ×1.5 and ×2 the window is narrower in skin
+  pixels and the sung line is double size, so long lyrics ran off the end — and half a lyric
+  is worse than none, since reading it is the whole point. Wrapping means no two rows need be
+  the same height, which is why `LyricsGeometry` works from measured heights rather than a
+  formula.
 
 Words come from a `.lrc` sitting beside the track — see `library.md`. Embedded `LYRICS` tags
 are ignored on purpose: two thirds of this library has them and none is timed, so they can

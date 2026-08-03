@@ -51,6 +51,9 @@ public final class LyricsWindowView extends View {
 
     private String title = "LYRICS";
     private List<String> lines = new ArrayList<>();
+    /** Each line broken into the rows it needs at the width we have. */
+    private List<List<String>> wrapped = new ArrayList<>();
+    private int[] heights = new int[0];
     private boolean synced;
     private String status = "";
     private int current = -1;
@@ -78,7 +81,12 @@ public final class LyricsWindowView extends View {
 
     public void setScale(int s) { this.scale = Math.max(1, s); requestLayout(); invalidate(); }
 
-    public void setGeometry(GenGeometry g) { this.geo = g; requestLayout(); invalidate(); }
+    public void setGeometry(GenGeometry g) {
+        this.geo = g;
+        relayoutLines();
+        requestLayout();
+        invalidate();
+    }
 
     public void setCallbacks(Callbacks c) { this.callbacks = c; }
 
@@ -89,6 +97,7 @@ public final class LyricsWindowView extends View {
         this.synced = isSynced;
         this.current = -1;
         this.scroll = this.targetScroll = 0;
+        relayoutLines();
         invalidate();
     }
 
@@ -105,8 +114,54 @@ public final class LyricsWindowView extends View {
     public void setCurrent(int index) {
         if (index == current) return;
         current = index;
-        targetScroll = LyricsGeometry.centredScroll(current, geo.listH());
+        // The sung line is drawn bigger, so it wraps differently and the whole list shifts.
+        // Re-measuring on a line change is a few hundred string widths, a few times a minute.
+        relayoutLines();
+        targetScroll = LyricsGeometry.centredScroll(heights, current, geo.listH());
         invalidate();
+    }
+
+    /**
+     * Break every line into the rows it needs, and note how tall each ends up.
+     *
+     * Wrapping rather than truncating: at x1.5 and x2 the window is narrower in skin pixels
+     * and the sung line is double size, so a long lyric ran off the end - and half a lyric is
+     * worse than none, because reading it is the entire point.
+     */
+    private void relayoutLines() {
+        int avail = geo.listW() + GenGeometry.SCROLL_W - 8;
+        wrapped = new ArrayList<>(lines.size());
+        heights = new int[lines.size()];
+        for (int i = 0; i < lines.size(); i++) {
+            boolean isCurrent = i == current;
+            List<String> rows = wrap(lines.get(i), avail, isCurrent ? big : line);
+            wrapped.add(rows);
+            int rowH = isCurrent ? LyricsGeometry.BIG_LINE_H : LyricsGeometry.LINE_H;
+            heights[i] = rows.size() * rowH + (isCurrent ? 2 * LyricsGeometry.CURRENT_PAD : 0);
+        }
+    }
+
+    /** Greedy word wrap. A single word too long for the line is left to overhang. */
+    private List<String> wrap(String text, float maxW, Paint p) {
+        List<String> out = new ArrayList<>();
+        if (text == null || text.isEmpty()) { out.add(""); return out; }
+        if (maxW <= 0 || p.measureText(text) <= maxW) { out.add(text); return out; }
+
+        String[] words = text.split(" ");
+        StringBuilder row = new StringBuilder();
+        for (String word : words) {
+            String candidate = row.length() == 0 ? word : row + " " + word;
+            if (p.measureText(candidate) <= maxW || row.length() == 0) {
+                row.setLength(0);
+                row.append(candidate);
+            } else {
+                out.add(row.toString());
+                row.setLength(0);
+                row.append(word);
+            }
+        }
+        if (row.length() > 0) out.add(row.toString());
+        return out;
     }
 
     @Override
@@ -208,23 +263,28 @@ public final class LyricsWindowView extends View {
             return;
         }
 
-        int from = LyricsGeometry.firstVisible(scroll, current, lines.size());
-        int to = LyricsGeometry.lastVisible(scroll, h, current, lines.size());
+        int from = LyricsGeometry.firstVisible(heights, scroll);
+        int to = LyricsGeometry.lastVisible(heights, scroll, h);
 
-        for (int i = from; i < to; i++) {
+        for (int i = from; i < to && i < wrapped.size(); i++) {
             boolean isCurrent = i == current;
             Paint p = isCurrent ? big : line;
-            // The sung line takes the highlight colour; everything else is dimmed so the
-            // eye lands on the right place without having to hunt for it.
+            // The sung line takes the highlight colour; everything else is dimmed so the eye
+            // lands on the right place without having to hunt for it.
             p.setColor(isCurrent ? style.current : style.normal);
             p.setAlpha(isCurrent ? 255 : 150);
             p.setTextAlign(Paint.Align.CENTER);
             p.getFontMetrics(metrics);
 
-            int top = LyricsGeometry.topOf(i, current) - scroll + y0;
-            float baseline = top + (LyricsGeometry.heightOf(i, current)
-                    - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
-            c.drawText(fit(lines.get(i), w - 8, p), x + w / 2f, baseline, p);
+            int rowH = isCurrent ? LyricsGeometry.BIG_LINE_H : LyricsGeometry.LINE_H;
+            int top = LyricsGeometry.topOf(heights, i) - scroll + y0
+                    + (isCurrent ? LyricsGeometry.CURRENT_PAD : 0);
+            List<String> rows = wrapped.get(i);
+            for (int r = 0; r < rows.size(); r++) {
+                float baseline = top + r * rowH
+                        + (rowH - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
+                c.drawText(rows.get(r), x + w / 2f, baseline, p);
+            }
             p.setTextAlign(Paint.Align.LEFT);
             p.setAlpha(255);
         }
@@ -258,17 +318,6 @@ public final class LyricsWindowView extends View {
     }
 
     // ------------------------------------------------------------------ bits
-
-    private String fit(String s, float maxW, Paint p) {
-        if (maxW <= 0) return "";
-        if (p.measureText(s) <= maxW) return s;
-        int lo = 0, hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (p.measureText(s.substring(0, mid) + "…") <= maxW) lo = mid; else hi = mid - 1;
-        }
-        return s.substring(0, lo) + "…";
-    }
 
     private void sprite(Canvas c, String name, int x, int y) {
         SkinSprites.Rect r = GenSprites.src(name);

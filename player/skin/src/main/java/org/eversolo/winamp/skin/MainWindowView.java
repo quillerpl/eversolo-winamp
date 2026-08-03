@@ -57,7 +57,12 @@ public final class MainWindowView extends View {
         void onToggleVisualiser();
         /** Tapping the clock: elapsed or remaining. */
         void onToggleTimeMode();
-        /** Tapping the song title: the tags or the file name. */
+        /**
+         * Tapping the song title. This opens the lyrics: it is the biggest, most obvious
+         * thing on the window and it is already about the song, so it is where a person
+         * looks. The tags/file-name toggle it used to do moved to the options fly-out, which
+         * is where a setting belongs and where nobody has to find it by accident.
+         */
         void onToggleTitleMode();
         /** Tapping the Winamp logo, bottom right: choose a skin. */
         void onLogo();
@@ -499,7 +504,7 @@ public final class MainWindowView extends View {
             // The clock: tap to count down instead of up, as Winamp did. 39,26 is the
             // clickable area webamp uses; a few pixels taller here for fingers.
             new Hit("time", 36, 24, 62, 17),
-            // The song title: tap to see the file name instead.
+            // The song title: tap for the words. See Callbacks.onToggleTitleMode.
             new Hit("title", 111, 20, 154, 14),
             // The lightning-bolt logo in the bottom-right corner. In Winamp it opened the
             // About box; here it is where you change the skin, which is the nearest thing

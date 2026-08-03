@@ -3,71 +3,61 @@ package org.eversolo.winamp.skin;
 /**
  * Where each lyric line sits, and how far the list has scrolled.
  *
- * The line being sung is drawn at twice the size of the rest, which is what makes this
- * different from every other list in the app: rows are no longer all the same height, so
- * none of `ListMath` applies. One line is tall, the others are short, and the tall one is
- * held in the middle of the window while the words move past it.
+ * Every other list in the app has rows of one height, which is what `ListMath` assumes. Here
+ * no two rows need match: the line being sung is drawn at double size, and any line - at any
+ * size - wraps onto as many rows as its words need. A truncated lyric is worse than no lyric,
+ * so wrapping is not optional, and once lines wrap their heights can only be measured, not
+ * calculated.
  *
- * Android-free, because "the sung line is more or less in the middle" is exactly the kind of
- * claim that looks right in a screenshot and is half a line out in the hand.
+ * So the heights are handed in and this works from a running total. Android-free, because
+ * "the sung line sits in the middle" is exactly the kind of claim that looks right in a
+ * screenshot and is half a line out in the hand.
  */
 public final class LyricsGeometry {
 
-    /** Height of an ordinary line, in skin pixels, before the window scale is applied. */
+    /** Height of one row of ordinary text, in skin pixels, before the window scale. */
     public static final int LINE_H = 11;
 
-    /** The sung line is drawn at double size, so it takes double the room. */
-    public static final int CURRENT_H = LINE_H * 2;
+    /** And of one row of the sung line, which is drawn at double size. */
+    public static final int BIG_LINE_H = LINE_H * 2;
 
-    /** A little air above and below the big line, so it does not touch its neighbours. */
+    /** A little air above and below the sung line so it does not touch its neighbours. */
     public static final int CURRENT_PAD = 3;
 
     private LyricsGeometry() {}
 
-    /** How tall line {@code i} is, given which line is currently being sung. */
-    public static int heightOf(int i, int current) {
-        return i == current ? CURRENT_H + 2 * CURRENT_PAD : LINE_H;
-    }
-
-    /**
-     * The top of line {@code i}, measured from the top of the whole list.
-     *
-     * Only one line is ever tall, so this is a multiplication rather than a loop: every line
-     * is LINE_H, plus the extra belonging to the sung line if it is above this one.
-     */
-    public static int topOf(int i, int current) {
-        int extra = CURRENT_H + 2 * CURRENT_PAD - LINE_H;
-        int y = i * LINE_H;
-        if (current >= 0 && current < i) y += extra;
+    /** The top of line {@code i}, measured from the top of the whole list. */
+    public static int topOf(int[] heights, int i) {
+        int y = 0;
+        for (int n = 0; n < i && n < heights.length; n++) y += heights[n];
         return y;
     }
 
-    /** The height of the whole list. */
-    public static int totalHeight(int count, int current) {
-        int extra = CURRENT_H + 2 * CURRENT_PAD - LINE_H;
-        return count * LINE_H + (current >= 0 && current < count ? extra : 0);
+    public static int totalHeight(int[] heights) {
+        int y = 0;
+        for (int h : heights) y += h;
+        return y;
     }
 
     /**
      * How far to scroll so the sung line sits in the middle of a window {@code viewportH}
-     * tall. Negative means the first lines hang below the top edge, which is correct and is
-     * what the streaming players do: the highlight stays put and the words travel.
+     * tall. Negative means the opening lines hang above the top edge, which is right: the
+     * highlight stays put and the words travel past it.
      *
      * Before the first line is due, the list simply sits at the top.
      */
-    public static int centredScroll(int current, int viewportH) {
-        if (current < 0) return 0;
-        int centreOfLine = topOf(current, current) + heightOf(current, current) / 2;
-        return centreOfLine - viewportH / 2;
+    public static int centredScroll(int[] heights, int current, int viewportH) {
+        if (current < 0 || current >= heights.length) return 0;
+        return topOf(heights, current) + heights[current] / 2 - viewportH / 2;
     }
 
     /**
      * Ease the scroll toward its target instead of jumping.
      *
-     * A jump on every line change reads as a flicker; this covers a fixed fraction of the
-     * remaining distance each frame, which is quick when a line change moves the list a long
-     * way and imperceptible when it does not. Always closes the last pixel, or the list
-     * creeps for ever and never settles.
+     * A jump on every line change reads as a flicker; this covers a fixed fraction of what
+     * is left each frame, which is quick when a line change moves the list a long way and
+     * imperceptible when it does not. Always closes the last pixel, or the list creeps for
+     * ever and never settles.
      */
     public static int easeScroll(int from, int target, int perFrameTenths) {
         int gap = target - from;
@@ -77,19 +67,23 @@ public final class LyricsGeometry {
         return from + step;
     }
 
-    /** First line that could be on screen, given the scroll. Never below zero. */
-    public static int firstVisible(int scroll, int current, int count) {
-        for (int i = 0; i < count; i++) {
-            if (topOf(i, current) + heightOf(i, current) > scroll) return i;
+    /** First line that could be on screen. */
+    public static int firstVisible(int[] heights, int scroll) {
+        int y = 0;
+        for (int i = 0; i < heights.length; i++) {
+            if (y + heights[i] > scroll) return i;
+            y += heights[i];
         }
-        return Math.max(0, count - 1);
+        return Math.max(0, heights.length - 1);
     }
 
     /** One past the last line that could be on screen. */
-    public static int lastVisible(int scroll, int viewportH, int current, int count) {
-        for (int i = Math.max(0, firstVisible(scroll, current, count)); i < count; i++) {
-            if (topOf(i, current) > scroll + viewportH) return i;
+    public static int lastVisible(int[] heights, int scroll, int viewportH) {
+        int y = 0;
+        for (int i = 0; i < heights.length; i++) {
+            if (y > scroll + viewportH) return i;
+            y += heights[i];
         }
-        return count;
+        return heights.length;
     }
 }

@@ -55,8 +55,8 @@ public final class BrowserWindowView extends View {
         void onFullScreen(boolean on);
         /** MAIN x8: draw the main window one whole scale larger than fits, and crop it. */
         void onOversize(boolean on);
-        /** LYRICS: open the lyrics window for whatever is playing. */
-        void onLyrics();
+        /** SONG/FILE: the main window's title strip shows tags or the file name. */
+        void onTitleMode();
     }
 
     /** Nothing of this row is in the playlist / some of it is / all of it is. */
@@ -569,8 +569,8 @@ public final class BrowserWindowView extends View {
                     boolean on = !zoom.isFullScreen();
                     zoom.setFullScreen(on);
                     callbacks.onFullScreen(on);
-                } else if (which == ZoomChooser.LYRICS) {
-                    callbacks.onLyrics();
+                } else if (which == ZoomChooser.TITLE_MODE) {
+                    callbacks.onTitleMode();
                 } else if (which == ZoomChooser.OVERSIZE) {
                     boolean on = !zoom.isOversize();
                     zoom.setOversize(on);

@@ -98,36 +98,35 @@ public class LrcTest {
                 LrcParser.parse("[00:60.00]x\n").synced, false);
 
         System.out.println("\n=== keeping the sung line in the middle ===");
-        final int VIEW = 200;                       // a window 200 skin px tall
-        // With nothing sung yet the list sits at the top rather than jumping about.
-        check("before the song starts", LyricsGeometry.centredScroll(-1, VIEW), 0);
-        // Line 0 tall and centred: its middle should land on the middle of the window.
-        int s0 = LyricsGeometry.centredScroll(0, VIEW);
-        int mid0 = LyricsGeometry.topOf(0, 0) + LyricsGeometry.heightOf(0, 0) / 2;
-        check("line 0 sits dead centre", mid0 - s0, VIEW / 2);
-        int s9 = LyricsGeometry.centredScroll(9, VIEW);
-        int mid9 = LyricsGeometry.topOf(9, 9) + LyricsGeometry.heightOf(9, 9) / 2;
-        check("and so does line 9", mid9 - s9, VIEW / 2);
-        check("the early lines hang above the top edge, as they should", s0 < 0, true);
+        final int VIEW = 200;
+        // Ten ordinary lines with the fourth sung, and the sung one wrapped onto two rows -
+        // which is the case that matters: heights differ, so nothing can be calculated.
+        int[] h = new int[10];
+        for (int i = 0; i < h.length; i++) h[i] = LyricsGeometry.LINE_H;
+        h[3] = 2 * LyricsGeometry.BIG_LINE_H + 2 * LyricsGeometry.CURRENT_PAD;
 
-        System.out.println("\n=== the sung line is the only tall one ===");
-        check("an ordinary line", LyricsGeometry.heightOf(3, 7), LyricsGeometry.LINE_H);
-        check("the sung one is double plus air", LyricsGeometry.heightOf(7, 7),
-                LyricsGeometry.CURRENT_H + 2 * LyricsGeometry.CURRENT_PAD);
-        check("lines above it are not pushed down",
-                LyricsGeometry.topOf(3, 7), 3 * LyricsGeometry.LINE_H);
-        check("lines below it are",
-                LyricsGeometry.topOf(8, 7) - LyricsGeometry.topOf(7, 7),
-                LyricsGeometry.heightOf(7, 7));
-        // topOf must agree with adding the heights up one at a time, or the list drifts.
+        check("nothing sung yet: sit at the top", LyricsGeometry.centredScroll(h, -1, VIEW), 0);
+        int s3 = LyricsGeometry.centredScroll(h, 3, VIEW);
+        check("the sung line sits dead centre",
+                LyricsGeometry.topOf(h, 3) + h[3] / 2 - s3, VIEW / 2);
+        check("even when it is two rows tall", h[3] > LyricsGeometry.LINE_H * 2, true);
+        check("the early lines hang above the top edge", s3 < 0, true);
+        check("an index past the end is harmless",
+                LyricsGeometry.centredScroll(h, 99, VIEW), 0);
+        check("so is an empty song", LyricsGeometry.centredScroll(new int[0], 0, VIEW), 0);
+
+        System.out.println("\n=== the running total has to agree with itself ===");
         int walk = 0;
         boolean agrees = true;
-        for (int i = 0; i < 40; i++) {
-            if (LyricsGeometry.topOf(i, 7) != walk) agrees = false;
-            walk += LyricsGeometry.heightOf(i, 7);
+        for (int i = 0; i < h.length; i++) {
+            if (LyricsGeometry.topOf(h, i) != walk) agrees = false;
+            walk += h[i];
         }
         check("topOf agrees with stacking them by hand", agrees, true);
-        check("and with the total", LyricsGeometry.totalHeight(40, 7), walk);
+        check("and with the total", LyricsGeometry.totalHeight(h), walk);
+        check("lines above the tall one are not pushed down",
+                LyricsGeometry.topOf(h, 2), 2 * LyricsGeometry.LINE_H);
+        check("lines below it are", LyricsGeometry.topOf(h, 4) - LyricsGeometry.topOf(h, 3), h[3]);
 
         System.out.println("\n=== the scroll eases, and it settles ===");
         int at = 0, steps = 0;
@@ -141,11 +140,11 @@ public class LrcTest {
         check("it never overshoots", LyricsGeometry.easeScroll(499, 500, 3) <= 500, true);
 
         System.out.println("\n=== only the lines on screen get drawn ===");
-        int scroll = LyricsGeometry.centredScroll(20, VIEW);
-        int first = LyricsGeometry.firstVisible(scroll, 20, 100);
-        int last = LyricsGeometry.lastVisible(scroll, VIEW, 20, 100);
-        check("the sung line is in the visible range", first <= 20 && 20 < last, true);
-        check("and it is a handful of lines, not all hundred", last - first < 30, true);
+        int first = LyricsGeometry.firstVisible(h, s3);
+        int last = LyricsGeometry.lastVisible(h, s3, VIEW);
+        check("the sung line is in the visible range", first <= 3 && 3 < last, true);
+        check("a scroll above the start still begins at line 0",
+                LyricsGeometry.firstVisible(h, -500), 0);
 
         System.out.println("\n================================");
         System.out.println("  " + pass + " passed, " + fail + " failed");
