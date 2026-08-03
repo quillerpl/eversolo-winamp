@@ -408,7 +408,10 @@ public final class BrowserWindowView extends View {
     private void drawBottomButtons(Canvas c) {
         for (int i = 0; i < buttons.length; i++) {
             PlaylistGeometry.Box b = geo.bottomButton(i);
-            boolean held = buttons[i].toLowerCase(java.util.Locale.UK).equals(pressed);
+            // Keyed by position, never by label. The labels are configurable - this window
+            // is the browser and the skin chooser - and keying on the words meant renaming a
+            // button silently unhooked it, and worse, "CLOSE" collided with the title bar's X.
+            boolean held = ("btn" + i).equals(pressed);
             sprite(c, held ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON", b.x, b.y);
             buttonLabel(c, buttons[i], b);
         }
@@ -514,7 +517,7 @@ public final class BrowserWindowView extends View {
         }
         for (int i = 0; i < buttons.length; i++) {
             if (geo.bottomButton(i).contains(x, y)) {
-                pressed = buttons[i].toLowerCase(java.util.Locale.UK);
+                pressed = "btn" + i;
                 invalidate();
                 return true;
             }
@@ -596,11 +599,11 @@ public final class BrowserWindowView extends View {
             tapRow(y);
         } else if ("close".equals(was) && geo.closeButton().contains(x, y)) {
             if (callbacks != null) callbacks.onClose();
-        } else if ("done".equals(was) && geo.bottomButton(0).contains(x, y)) {
+        } else if ("btn0".equals(was) && geo.bottomButton(0).contains(x, y)) {
             if (callbacks != null) callbacks.onClose();
-        } else if ("add".equals(was) && geo.bottomButton(1).contains(x, y)) {
+        } else if ("btn1".equals(was) && geo.bottomButton(1).contains(x, y)) {
             if (callbacks != null) callbacks.onAdd(sortedSelection());
-        } else if ("options".equals(was) && geo.bottomButton(2).contains(x, y)) {
+        } else if ("btn2".equals(was) && geo.bottomButton(2).contains(x, y)) {
             zoom.open();
         } else if ("up".equals(was)) {
             if (callbacks != null) callbacks.onUp();

@@ -29,8 +29,8 @@ android {
         // BUMP THIS EVERY BUILD YOU INTEND TO INSTALL. The device's web installer at :18888
         // silently keeps the existing app when the versionCode has not changed - which
         // looks exactly like "the new code did nothing".
-        versionCode 38
-        versionName "1.3.4-balance"
+        versionCode 39
+        versionName "1.3.5-buttons"
     }
     signingConfigs {
         if (keystoreFile.exists()) {

@@ -22,6 +22,13 @@ the tabs and the three buttons — SKINS, and CLOSE / RESCAN / OPTIONS. Rows are
 `container` so one tap applies a skin rather than selecting it. Everything else — the frame,
 scrolling, hit-testing, the options fly-out — is shared.
 
+**Buttons are identified by position, never by their label.** They used to be keyed on the
+word — `pressed = "done"` — which was fine while there was one window and the words were
+fixed. The moment the labels became configurable, renaming DONE to CLOSE silently unhooked
+the button, and the new name collided with the title bar's own `"close"`: pressing the bottom
+button lit up the X in the corner and did nothing else. RESCAN was dead for the same reason.
+If a control can be relabelled, nothing may key off its text.
+
 ## Sizing
 
 * The playlist is the only window Winamp lets you resize, and only in whole segments: legal
