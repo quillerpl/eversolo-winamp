@@ -535,7 +535,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         String path = t == null ? "" : t.absolutePath;
         if (path.equals(lyricsForPath)) return;   // same track; this runs on every poll
         lyricsForPath = path;
-        lyrics = path.isEmpty() ? null : LyricsStore.forTrack(path);
+        lyrics = path.isEmpty() ? null : LyricsStore.forTrack(ctx.getFilesDir(), path);
 
         showLyrics(t, lyrics);
     }
@@ -584,16 +584,16 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 Logs.i(TAG, "lyrics search found nothing for " + path);
                 return;
             }
-            String where = LyricsStore.save(path, lrc);
+            String where = LyricsStore.save(ctx.getFilesDir(), path, lrc);
             if (where != null) {
                 lyricsForPath = null;               // re-read from the file we just wrote
                 loadLyricsIfTrackChanged();
-                mainWindow.flashTitle(where.toUpperCase(java.util.Locale.UK));
+                lyricsWindow.flash(where);
             } else {
                 // Could not write anywhere. Show them anyway - they were found, and failing
                 // to save is no reason to withhold the words for the song playing right now.
                 showLyrics(t, LrcParser.parse(lrc));
-                lyricsWindow.setStatus("Found them, but could not save the file");
+                lyricsWindow.flash("Found them, but could not save the file");
                 Logs.w(TAG, "found lyrics but could not save for " + path);
             }
         });

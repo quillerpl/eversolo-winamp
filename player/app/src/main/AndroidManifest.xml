@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- Writing .lrc lyric files next to the music. The app read storage for two years and
+         never wrote to it, so this was missing and every save failed silently. With
+         targetSdk 29 + requestLegacyExternalStorage this grants the primary volume; a
+         removable one may still refuse, which is why saving falls all the way back to the
+         app's own private folder, where no permission is needed and nothing can refuse. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <!-- Used only by the optional log shipper and, from Phase 2, the loopback call
          to the device's own control API on 127.0.0.1:9529. -->
     <uses-permission android:name="android.permission.INTERNET" />

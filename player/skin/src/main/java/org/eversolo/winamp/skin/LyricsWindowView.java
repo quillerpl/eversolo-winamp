@@ -58,6 +58,8 @@ public final class LyricsWindowView extends View {
     private int[] heights = new int[0];
     private boolean synced;
     private String status = "";
+    private String flash = "";
+    private long flashUntil;
     private boolean searchOffered;
     private int current = -1;
 
@@ -108,6 +110,20 @@ public final class LyricsWindowView extends View {
     public void setStatus(String s) {
         this.status = s == null ? "" : s;
         invalidate();
+    }
+
+    /**
+     * A line along the bottom for a few seconds: what just happened.
+     *
+     * Separate from the status because the status only appears on an empty window, so a
+     * message about a save that had just produced words could never be seen - which is
+     * precisely how a silent failure got reported as working.
+     */
+    public void flash(String message) {
+        this.flash = message == null ? "" : message;
+        this.flashUntil = android.os.SystemClock.uptimeMillis() + 4000;
+        invalidate();
+        postInvalidateDelayed(4100);
     }
 
     /** Whether to offer a SEARCH button under the message. */
@@ -199,6 +215,7 @@ public final class LyricsWindowView extends View {
         drawFrame(canvas);
         drawTitle(canvas);
         drawWords(canvas);
+        drawFlash(canvas);
         drawCloseButton(canvas);
 
         canvas.restore();
@@ -259,6 +276,22 @@ public final class LyricsWindowView extends View {
             c.drawBitmap(gen, src, dst, blit);
             x += l[1] + 1;
         }
+    }
+
+    /** Drawn over the words, along the bottom, so it is visible whatever else is on screen. */
+    private void drawFlash(Canvas c) {
+        if (flash.isEmpty() || android.os.SystemClock.uptimeMillis() > flashUntil) return;
+        int w = geo.listW() + GenGeometry.SCROLL_W;
+        int y = geo.listY() + geo.listH() - LyricsGeometry.LINE_H;
+        fill.setColor(style.normalBg);
+        c.drawRect(geo.listX(), y, geo.listX() + w, y + LyricsGeometry.LINE_H, fill);
+        line.setColor(style.current);
+        line.setTextAlign(Paint.Align.CENTER);
+        line.getFontMetrics(metrics);
+        c.drawText(flash, geo.listX() + w / 2f,
+                y + (LyricsGeometry.LINE_H - (metrics.descent - metrics.ascent)) / 2f
+                        - metrics.ascent, line);
+        line.setTextAlign(Paint.Align.LEFT);
     }
 
     private void drawCloseButton(Canvas c) {

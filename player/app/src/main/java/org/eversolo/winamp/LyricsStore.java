@@ -48,18 +48,30 @@ public final class LyricsStore {
         return new File(base + ".lrc");
     }
 
-    /** And where the fallback copy would live. Named from the path, so it cannot collide. */
-    public static File fallbackPath(String audioPath) {
-        if (audioPath == null || audioPath.isEmpty()) return null;
-        return new File(FALLBACK_DIR, Integer.toHexString(audioPath.hashCode()) + ".lrc");
+    /** A name derived from the path, so two tracks called the same thing cannot collide. */
+    private static String keyFor(String audioPath) {
+        return Integer.toHexString(audioPath.hashCode()) + ".lrc";
     }
 
-    /** The `.lrc` for a track: beside it if possible, else in our own folder. Null if neither. */
-    public static File sidecarFor(String audioPath) {
-        File beside = sidecarPath(audioPath);
-        if (beside != null && beside.isFile()) return beside;
-        File fallback = fallbackPath(audioPath);
-        return fallback != null && fallback.isFile() ? fallback : null;
+    /** The shared fallback, on the primary volume. Needs write permission. */
+    public static File fallbackPath(String audioPath) {
+        if (audioPath == null || audioPath.isEmpty()) return null;
+        return new File(FALLBACK_DIR, keyFor(audioPath));
+    }
+
+    /** The last resort, inside the app itself, where no permission is needed at all. */
+    public static File privatePath(File privateDir, String audioPath) {
+        if (privateDir == null || audioPath == null || audioPath.isEmpty()) return null;
+        return new File(new File(privateDir, "lyrics"), keyFor(audioPath));
+    }
+
+    /** The `.lrc` for a track, wherever it managed to land. Null if there is none. */
+    public static File sidecarFor(File privateDir, String audioPath) {
+        for (File f : new File[]{sidecarPath(audioPath), fallbackPath(audioPath),
+                                 privatePath(privateDir, audioPath)}) {
+            if (f != null && f.isFile()) return f;
+        }
+        return null;
     }
 
     /**
@@ -67,30 +79,37 @@ public final class LyricsStore {
      * to the song" and "saved in the app's folder" are different promises and it should not
      * claim the first when it did the second.
      */
-    public static String save(String audioPath, String lrc) {
+    public static String save(File privateDir, String audioPath, String lrc) {
         if (lrc == null || lrc.isEmpty()) return null;
         String body = lrc.endsWith("\n") ? lrc : lrc + "\n";
+
         File beside = sidecarPath(audioPath);
         if (beside != null && write(beside, body)) {
             Logs.i(TAG, "saved beside the track: " + beside);
             return "Saved next to the song";
         }
-        File fallback = fallbackPath(audioPath);
-        if (fallback != null) {
-            File dir = fallback.getParentFile();
-            if (dir != null && !dir.isDirectory() && !dir.mkdirs()) {
-                Logs.w(TAG, "could not create " + dir);
-            }
-            if (write(fallback, body)) {
-                Logs.i(TAG, "the music volume is read-only to us; saved to " + fallback);
-                return "Saved in the app's folder - the music drive is read-only";
-            }
+        File shared = fallbackPath(audioPath);
+        if (shared != null && write(shared, body)) {
+            Logs.i(TAG, "music volume not writable; saved to " + shared);
+            return "Saved in EverSoloWinamp - the music drive is read-only";
         }
-        Logs.w(TAG, "could not save lyrics for " + audioPath);
+        // Inside the app's own directory. No permission governs this one, so if it fails the
+        // problem is the disk, not Android.
+        File mine = privatePath(privateDir, audioPath);
+        if (mine != null && write(mine, body)) {
+            Logs.i(TAG, "saved inside the app: " + mine);
+            return "Saved inside the app - storage is read-only";
+        }
+        Logs.w(TAG, "could not save lyrics anywhere for " + audioPath);
         return null;
     }
 
     private static boolean write(File f, String body) {
+        File dir = f.getParentFile();
+        if (dir != null && !dir.isDirectory() && !dir.mkdirs()) {
+            Logs.i(TAG, "cannot create " + dir);
+            return false;
+        }
         try (FileOutputStream out = new FileOutputStream(f)) {
             out.write(body.getBytes(StandardCharsets.UTF_8));
             return true;
@@ -106,8 +125,8 @@ public final class LyricsStore {
      * Never throws. A file on a disk somebody else filled is not something to trust with the
      * app's startup - that lesson cost a release.
      */
-    public static LrcParser.Lyrics forTrack(String audioPath) {
-        File f = sidecarFor(audioPath);
+    public static LrcParser.Lyrics forTrack(File privateDir, String audioPath) {
+        File f = sidecarFor(privateDir, audioPath);
         if (f == null) return null;
         try {
             if (f.length() <= 0 || f.length() > MAX_BYTES) {

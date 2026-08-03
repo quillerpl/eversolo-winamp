@@ -83,11 +83,19 @@ When there are none, the window offers a **SEARCH** button: one track, looked up
 from LRCLIB. That is all it is — the library sweep is `fetch-lyrics.py` on a laptop, where it
 can be watched and resumed and fixed without a build. This is for the album added last week.
 
-Saving tries beside the track first, because that is portable and every other player reads it.
-The music is on a removable volume and Android 11 may refuse to write there, so there is a
-fallback in `EverSoloWinamp/lyrics/`, and the message says which happened — "saved next to the
-song" and "saved in the app's folder" are different promises. If neither works the words are
-still shown for the track playing now: failing to save is no reason to withhold them.
+Saving tries three places in order: beside the track (portable, every other player reads it),
+then `EverSoloWinamp/lyrics/`, then inside the app itself — where no permission governs the
+write, so a failure there means the disk, not Android. The message says which happened; those
+are different promises and it should not claim the first when it did the third.
+
+**The app had no write permission at all until v1.3.1.** It read storage for the whole life of
+the project and never once wrote to it, so `WRITE_EXTERNAL_STORAGE` was simply absent and every
+save failed — including the "fallback", which was another folder on the same storage it could
+not write to. Worth remembering when adding the first write to something that has only read.
+
+The result is reported through the window's own flash line rather than its status, because the
+status only appears on an *empty* window: a message about a save that had just produced words
+could never be seen. That is exactly how a silent failure came to be reported as working.
 
 Words come from a `.lrc` sitting beside the track — see `library.md`. Embedded `LYRICS` tags
 are ignored on purpose: two thirds of this library has them and none is timed, so they can
