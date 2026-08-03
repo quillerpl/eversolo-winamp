@@ -83,9 +83,9 @@ in the player's bottom-right corner**:
 
 ## The windows
 
-Three, as Winamp had, drawn from an ordinary `.wsz` skin. On a 6-inch screen there is no
-room for two at a size where a track row can be tapped, so they take turns: **PL** swaps the
-main window for the playlist, and the playlist's **X** swaps back.
+Drawn from an ordinary `.wsz` skin. On a 6-inch screen there is no room for two at a size
+where a track row can be tapped, so they take turns: **PL** swaps the main window for the
+playlist, and the playlist's **X** swaps back.
 
 ### Playlist editor
 
@@ -133,6 +133,31 @@ A square down the left of a row means it is already in the playlist: filled for 
 hollow for some. That, and the line along the bottom, are drawn inside the window rather
 than shown as a Toast — the player is an overlay above everything, so a Toast behind it
 would be no feedback at all.
+
+### Lyrics
+
+**Tap the song title** on the main window and the words appear, with the line being sung
+drawn at twice the size in bold and held in the middle of the window while the rest scroll
+past — the arrangement the streaming services use. Tap the title again to close it.
+
+Nothing listens to the music to work this out, and neither does Tidal: time-synced lyrics are
+a database in which somebody has already typed a timestamp against each line. The player only
+ever asks "the track is at 2:14.3, which line is that?"
+
+The words come from an `.lrc` file sitting next to the track. Two ways to get them:
+
+* **In the app** — when a track has none, the lyrics window offers a **SEARCH** button that
+  looks that one track up and keeps the result.
+* **In bulk** — `fetch-lyrics.py` fills a whole library from a Mac over the device's own SMB
+  share. No cable, no build, no ADB; it reports before it writes anything, it never touches
+  an audio file, and undo is `find . -name '*.lrc' -delete`. On the author's 3,510-track
+  library it found timed lyrics for 2,417 of them in under an hour.
+
+Both use [LRCLIB](https://lrclib.net) — free, no account, no API key, run by volunteers for
+exactly this purpose.
+
+Lines wrap rather than truncate, because half a lyric is worse than none. Where only untimed
+lyrics exist, they are shown without a highlight and the window says so.
 
 ---
 
