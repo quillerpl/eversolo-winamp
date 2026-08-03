@@ -62,8 +62,10 @@ public class MainActivity extends Activity {
 
         buildGate();
 
-        if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
+        // Ask when EITHER is missing, not just read. Write arrived years after read, so on
+        // every existing install read was already granted, this test was false, and the
+        // request never ran - the app asked for nothing and then could not save anything.
+        if (!hasStorage() || !canWriteStorage()) {
             requestPermissions(new String[]{
                     Manifest.permission.READ_EXTERNAL_STORAGE,
                     Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
@@ -88,8 +90,18 @@ public class MainActivity extends Activity {
         updateGate();
     }
 
+    /** Reading is what the player needs to run at all. */
     private boolean hasStorage() {
         return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * Writing is only for saving lyrics beside the music. Refusing it is survivable - they go
+     * inside the app instead - so this never blocks the gate, it only decides whether to ask.
+     */
+    private boolean canWriteStorage() {
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
