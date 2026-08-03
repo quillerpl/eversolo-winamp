@@ -1,4 +1,5 @@
 import org.eversolo.winamp.skin.LyricsGeometry;
+import org.eversolo.winamp.tags.Json;
 import org.eversolo.winamp.tags.LrcParser;
 
 import java.util.Objects;
@@ -96,6 +97,32 @@ public class LrcTest {
                 LrcParser.parse("[00:20.00]b\n[00:10.00]a\n").lines.get(0).text, "a");
         check("60 seconds is not a valid second, so it is words",
                 LrcParser.parse("[00:60.00]x\n").synced, false);
+
+        System.out.println("\n=== reading the lyrics service's reply ===");
+        // A reply shaped like the real one. The line breaks arrive as two characters, and
+        // getting that wrong turns every song into one very long lyric.
+        String reply = "{\"id\":42,\"trackName\":\"Suzanne\",\"duration\":195.0,"
+                + "\"plainLyrics\":\"Suzanne takes you down\","
+                + "\"syncedLyrics\":\"[00:09.92] Suzanne takes you down\\n"
+                + "[00:13.53] To her place near the river\\n\"}";
+        String synced = Json.string(reply, "syncedLyrics");
+        check("the escaped newline became a real one", synced.split("\n").length, 2);
+        check("and the words came through",
+                LrcParser.parse(synced).lines.get(1).text, "To her place near the river");
+        check("a number reads as a number", Json.number(reply, "duration"), 195L);
+        check("a plain string too", Json.string(reply, "trackName"), "Suzanne");
+        check("a missing key is null", Json.string(reply, "nope"), null);
+        check("a missing number is null", Json.number(reply, "nope"), null);
+        check("a JSON null is not a string",
+                Json.string("{\"syncedLyrics\":null}", "syncedLyrics"), null);
+        check("an empty string counts as nothing",
+                Json.string("{\"syncedLyrics\":\"\"}", "syncedLyrics"), null);
+        check("an escaped quote survives",
+                Json.string("{\"a\":\"he said \\\"no\\\"\"}", "a"), "he said \"no\"");
+        check("a unicode escape survives",
+                Json.string("{\"a\":\"caf\\u00e9\"}", "a"), "café");
+        check("the key must match, not merely appear",
+                Json.string("{\"plainLyrics\":\"x\",\"syncedLyrics\":\"y\"}", "syncedLyrics"), "y");
 
         System.out.println("\n=== keeping the sung line in the middle ===");
         final int VIEW = 200;

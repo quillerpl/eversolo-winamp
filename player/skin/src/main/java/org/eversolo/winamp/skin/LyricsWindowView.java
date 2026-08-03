@@ -30,6 +30,8 @@ public final class LyricsWindowView extends View {
     public interface Callbacks {
         void onClose();
         void onFocused();
+        /** The SEARCH button, offered only when there are no words to show. */
+        void onSearch();
     }
 
     /** How much of the remaining distance the scroll covers each frame, in tenths. */
@@ -56,6 +58,7 @@ public final class LyricsWindowView extends View {
     private int[] heights = new int[0];
     private boolean synced;
     private String status = "";
+    private boolean searchOffered;
     private int current = -1;
 
     private int scroll;                 // where the list is now
@@ -105,6 +108,22 @@ public final class LyricsWindowView extends View {
     public void setStatus(String s) {
         this.status = s == null ? "" : s;
         invalidate();
+    }
+
+    /** Whether to offer a SEARCH button under the message. */
+    public void setSearchOffered(boolean offered) {
+        this.searchOffered = offered;
+        invalidate();
+    }
+
+    /**
+     * Where the SEARCH button sits: under the message, in the middle of the empty window.
+     * Public so the touch handler and the drawing agree on one rectangle rather than two.
+     */
+    public PlaylistGeometry.Box searchButton() {
+        int w = GenSprites.BUTTON_W, h = GenSprites.BUTTON_H;
+        int cx = geo.listX() + (geo.listW() + GenGeometry.SCROLL_W) / 2;
+        return new PlaylistGeometry.Box(cx - w / 2, geo.listY() + geo.listH() / 2 + 8, w, h);
     }
 
     /**
@@ -259,6 +278,17 @@ public final class LyricsWindowView extends View {
             c.drawText(status.isEmpty() ? "No lyrics for this track" : status,
                     x + w / 2f, y0 + h / 2f - metrics.ascent / 2f, line);
             line.setTextAlign(Paint.Align.LEFT);
+            if (searchOffered) {
+                PlaylistGeometry.Box b = searchButton();
+                sprite(c, "search".equals(pressed) ? "GENEX_BUTTON_PRESSED" : "GENEX_BUTTON",
+                        b.x, b.y);
+                line.setColor(0xFF101010);
+                line.setTextAlign(Paint.Align.CENTER);
+                line.getFontMetrics(metrics);
+                float by = b.y + (b.h - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
+                c.drawText("SEARCH", b.x + b.w / 2f, by, line);
+                line.setTextAlign(Paint.Align.LEFT);
+            }
             c.restore();
             return;
         }
@@ -299,15 +329,19 @@ public final class LyricsWindowView extends View {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 if (callbacks != null) callbacks.onFocused();
-                if (geo.closeButton().contains(x, y)) { pressed = "close"; invalidate(); }
+                if (geo.closeButton().contains(x, y)) pressed = "close";
+                else if (searchOffered && lines.isEmpty() && searchButton().contains(x, y)) {
+                    pressed = "search";
+                }
+                invalidate();
                 return true;
             case MotionEvent.ACTION_UP:
-                boolean wasClose = "close".equals(pressed);
+                String was = pressed;
                 pressed = null;
                 invalidate();
-                if (wasClose && geo.closeButton().contains(x, y) && callbacks != null) {
-                    callbacks.onClose();
-                }
+                if (callbacks == null) return true;
+                if ("close".equals(was) && geo.closeButton().contains(x, y)) callbacks.onClose();
+                else if ("search".equals(was) && searchButton().contains(x, y)) callbacks.onSearch();
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 pressed = null;

@@ -21,6 +21,7 @@ import org.eversolo.winamp.playlist.PlaylistController;
 import org.eversolo.winamp.skin.BrowserWindowView;
 import org.eversolo.winamp.skin.GenGeometry;
 import org.eversolo.winamp.skin.LyricsWindowView;
+import org.eversolo.winamp.tags.LrcParser;
 import org.eversolo.winamp.skin.MainWindowView;
 import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.PlaylistWindowView;
@@ -103,12 +104,14 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
     private boolean browserOpen = false;
     private boolean skinsOpen = false;
     private boolean lyricsOpen = false;
-    private org.eversolo.winamp.tags.LrcParser.Lyrics lyrics;
+    private LrcParser.Lyrics lyrics;
     /** Null rather than empty, so the very first look always runs even with no track. */
     private String lyricsForPath = null;
     /** The last position the device reported, and when we heard it, so we can interpolate. */
     private long posMs, posHeardAt;
     private boolean lyricsTicking = false;
+    private final LyricsFetcher lyricsFetcher = new LyricsFetcher();
+    private boolean lyricsSearching = false;
     private boolean marqueeRunning = false;
     private boolean shuffleOn = false;
     private boolean repeatOn = false;
@@ -223,6 +226,7 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         lyricsWindow.setCallbacks(new LyricsWindowView.Callbacks() {
             @Override public void onClose() { closeLyrics(); }
             @Override public void onFocused() { }
+            @Override public void onSearch() { searchForLyrics(); }
         });
         lyricsWindow.setVisibility(View.GONE);
         root.addView(lyricsWindow, centred());
@@ -533,18 +537,66 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
         lyricsForPath = path;
         lyrics = path.isEmpty() ? null : LyricsStore.forTrack(path);
 
+        showLyrics(t, lyrics);
+    }
+
+    /** Put whatever we have on screen, and say what is missing when something is. */
+    private void showLyrics(Track t, LrcParser.Lyrics l) {
+        lyrics = l;
         String heading = t == null ? "LYRICS" : t.title;
-        if (lyrics == null) {
+        if (l == null) {
             lyricsWindow.setLines(heading, new ArrayList<String>(), false);
-            lyricsWindow.setStatus("No lyrics file for this track");
-        } else {
-            List<String> text = new ArrayList<>(lyrics.lines.size());
-            for (org.eversolo.winamp.tags.LrcParser.Line l : lyrics.lines) text.add(l.text);
-            lyricsWindow.setLines(heading, text, lyrics.synced);
-            if (!lyrics.synced) {
-                lyricsWindow.setStatus("These lyrics have no timings, so nothing is highlighted");
-            }
+            lyricsWindow.setStatus("No lyrics for this track");
+            lyricsWindow.setSearchOffered(t != null);
+            return;
         }
+        lyricsWindow.setSearchOffered(false);
+        List<String> text = new ArrayList<>(l.lines.size());
+        for (LrcParser.Line line : l.lines) text.add(line.text);
+        lyricsWindow.setLines(heading, text, l.synced);
+        if (!l.synced) {
+            lyricsWindow.setStatus("These lyrics have no timings, so nothing is highlighted");
+        }
+    }
+
+    /**
+     * SEARCH: look this one track up and keep what comes back.
+     *
+     * One track, on demand. The library sweep is `fetch-lyrics.py` on a laptop, where it can
+     * be watched and resumed; this is for the album added last week.
+     */
+    private void searchForLyrics() {
+        if (lyricsSearching) return;
+        final Track t = playlist.current();
+        if (t == null) return;
+        lyricsSearching = true;
+        lyricsWindow.setSearchOffered(false);
+        lyricsWindow.setStatus("Searching for lyrics...");
+
+        long duration = engine.state().durationMs;
+        if (duration <= 0) duration = t.durationMs;
+        final String path = t.absolutePath;
+        lyricsFetcher.fetch(t.artist, t.title, t.album, duration, (lrc, message) -> {
+            lyricsSearching = false;
+            if (lrc == null) {
+                lyricsWindow.setStatus(message == null ? "Nothing found" : message);
+                lyricsWindow.setSearchOffered(true);
+                Logs.i(TAG, "lyrics search found nothing for " + path);
+                return;
+            }
+            String where = LyricsStore.save(path, lrc);
+            if (where != null) {
+                lyricsForPath = null;               // re-read from the file we just wrote
+                loadLyricsIfTrackChanged();
+                mainWindow.flashTitle(where.toUpperCase(java.util.Locale.UK));
+            } else {
+                // Could not write anywhere. Show them anyway - they were found, and failing
+                // to save is no reason to withhold the words for the song playing right now.
+                showLyrics(t, LrcParser.parse(lrc));
+                lyricsWindow.setStatus("Found them, but could not save the file");
+                Logs.w(TAG, "found lyrics but could not save for " + path);
+            }
+        });
     }
 
     /**

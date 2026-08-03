@@ -79,6 +79,16 @@ Two things make it feel right rather than cheap:
   the same height, which is why `LyricsGeometry` works from measured heights rather than a
   formula.
 
+When there are none, the window offers a **SEARCH** button: one track, looked up on demand
+from LRCLIB. That is all it is — the library sweep is `fetch-lyrics.py` on a laptop, where it
+can be watched and resumed and fixed without a build. This is for the album added last week.
+
+Saving tries beside the track first, because that is portable and every other player reads it.
+The music is on a removable volume and Android 11 may refuse to write there, so there is a
+fallback in `EverSoloWinamp/lyrics/`, and the message says which happened — "saved next to the
+song" and "saved in the app's folder" are different promises. If neither works the words are
+still shown for the track playing now: failing to save is no reason to withhold them.
+
 Words come from a `.lrc` sitting beside the track — see `library.md`. Embedded `LYRICS` tags
 are ignored on purpose: two thirds of this library has them and none is timed, so they can
 fill a panel but never move the highlight.
