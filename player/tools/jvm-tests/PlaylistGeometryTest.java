@@ -2,6 +2,7 @@ import org.eversolo.winamp.skin.GenGeometry;
 import org.eversolo.winamp.skin.ListMath;
 import org.eversolo.winamp.skin.PlaylistGeometry;
 import org.eversolo.winamp.skin.GenSprites;
+import org.eversolo.winamp.skin.SkinSprites;
 import org.eversolo.winamp.skin.PleditStyle;
 import org.eversolo.winamp.skin.WindowScales;
 
@@ -274,6 +275,20 @@ public class PlaylistGeometryTest {
         int naive = (FULL - PlaylistGeometry.widthFor(USABLE, 6) * 6) / 2
                 + PlaylistGeometry.widthFor(USABLE, 6) * 6;
         check("without the slide it would still be covered", naive > USABLE, true);
+
+        System.out.println("\n=== the sliders sample the right part of their bitmap ===");
+        // A blue block appeared beside the balance slider on a skin that fills its spare
+        // space with cyan. The groove starts at x=9 in balance.bmp; the drawing code had 0
+        // typed into it. In the classic skin those nine columns are black, so it looked fine
+        // for as long as only one skin was ever used.
+        SkinSprites.Rect balBg = SkinSprites.src("MAIN_BALANCE_BACKGROUND");
+        check("the balance groove is not at x=0", balBg.x, 9);
+        check("and it is 38 wide, not 68", balBg.w, 38);
+        SkinSprites.Rect volBg = SkinSprites.src("MAIN_VOLUME_BACKGROUND");
+        check("the volume groove does start at 0", volBg.x, 0);
+        check("and it is the full 68", volBg.w, 68);
+        check("balance is narrower than volume - that is the whole trap",
+                balBg.w < volBg.w, true);
 
         System.out.println("\n=== shared list arithmetic ===");
         check("nothing to scroll", ListMath.maxOffset(5, 15), 0);

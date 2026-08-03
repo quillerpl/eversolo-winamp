@@ -73,3 +73,21 @@ owner's own sideloaded build. A downloaded release finds nothing, and `MainActiv
 plain-Android first-run screen — plain because with no skin there is nothing to draw a skinned
 window with. After that, the **Winamp logo in the main window's bottom-right corner** (hit
 area 247,86 22x22, measured off `main.bmp`) opens the in-player chooser.
+
+## Why sprite coordinates are generated and never typed
+
+A bright blue block appeared beside the balance slider on a user-supplied skin. `drawBalance`
+had `src.set(0, 0, 38, 13)` typed into it, but the balance groove starts at **x=9** in
+`balance.bmp` — the first nine columns are spare. In the bundled classic skin those columns are
+black, the same as the window behind them, so it looked perfect for as long as only one skin
+was ever loaded. In a skin that fills its spare space with cyan, they are `(0, 198, 255)`.
+
+The table had the right numbers all along — `MAIN_BALANCE_BACKGROUND` is `balance.bmp, 9, 0,
+38, 420`. The drawing code just did not ask it.
+
+**So: if a number describes where something is inside a skin bitmap, it comes from
+`SkinSprites`.** Not from a comment, not from measuring a screenshot, and above all not from
+the one skin you happen to have open. `PlaylistGeometryTest` now asserts that the balance
+groove is not at x=0 and that it is narrower than the volume groove, which is the difference
+that makes this trap possible.
+

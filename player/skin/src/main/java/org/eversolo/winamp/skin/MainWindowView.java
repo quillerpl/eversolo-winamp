@@ -417,16 +417,27 @@ public final class MainWindowView extends View {
         }
     }
 
-    /** Balance is centred and inert: the device exposes no balance control. */
+    /**
+     * Balance is centred and inert: the device exposes no balance control.
+     *
+     * The groove starts at x=9 in balance.bmp, not at 0 - the first nine columns are spare.
+     * This drew from 0 because the numbers were typed here instead of read from the sprite
+     * table, and it went unnoticed for as long as it did because in the classic skin those
+     * columns are black, the same as the window behind. In a skin that fills its spare space
+     * with cyan you get a bright blue block beside the slider. Sprite coordinates are
+     * generated, never typed: this is why.
+     */
     private void drawBalance(Canvas c) {
         Bitmap bal = skin.bmp("balance.bmp");
         if (bal == null) return;
-        src.set(0, 0, 38, 13);
-        dst.set(177, 57, 177 + 38, 57 + 13);
+        SkinSprites.Rect bg = SkinSprites.src("MAIN_BALANCE_BACKGROUND");
+        int sx = bg != null ? bg.x : 9, sw = bg != null ? bg.w : 38;
+        src.set(sx, 0, sx + sw, 13);
+        dst.set(177, 57, 177 + sw, 57 + 13);
         c.drawBitmap(bal, src, dst, paint);
         SkinSprites.Rect thumb = SkinSprites.src("MAIN_BALANCE_THUMB");
         if (thumb == null) thumb = SkinSprites.src("MAIN_VOLUME_THUMB");
-        if (thumb != null) blit(c, thumb, 177 + (38 - 14) / 2, 58);
+        if (thumb != null) blit(c, thumb, 177 + (sw - 14) / 2, 58);
     }
 
     private void drawPosition(Canvas c) {
