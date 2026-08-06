@@ -33,6 +33,44 @@ returns its index page every time. A USB stick and the device's File app is the 
 With nothing playing, the main window's title strip shows the running version. That is the
 one-glance check that the install took.
 
+## Releasing
+
+Other people run this now, and they get it from **GitHub Releases** — a signed release APK
+named `EversoloWinamp-vX.Y.apk` attached to a tag. `assembleDebug` is for your own device;
+never publish it.
+
+```bash
+# 1. bump versionCode AND versionName in player/app/build.gradle
+cd player && ./gradlew assembleRelease
+# 2. CHECK THE SIGNATURE MATCHES THE LAST RELEASE - see below
+# 3. publish
+cp app/build/outputs/apk/release/app-release.apk /tmp/EversoloWinamp-v1.5.apk
+git tag -a v1.5 -m "..." && git push origin v1.5
+gh release create v1.5 /tmp/EversoloWinamp-v1.5.apk --title "..." --notes "..."
+```
+
+**The signing key is the thing that can go badly wrong.** Android refuses to install an
+update signed with a different key than the copy already on the device — the user's only
+way out is uninstalling first, which loses their playlist. `keystore.properties` and the
+`.jks` are git-ignored and exist **only on the owner's machine**: without them the release
+build still succeeds, it just comes out signed with nothing useful, and publishing that
+breaks the upgrade path for everyone.
+
+So verify before publishing, every time:
+
+```bash
+APKSIGNER=$(ls ~/Library/Android/sdk/build-tools/*/apksigner | tail -1)
+curl -sL -o /tmp/previous.apk \
+  https://github.com/quillerpl/eversolo-winamp/releases/latest/download/EversoloWinamp-vX.Y.apk
+"$APKSIGNER" verify --print-certs /tmp/previous.apk | grep "SHA-256 digest"
+"$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep "SHA-256 digest"
+```
+
+The two digests must be identical. If they are not, stop and find the keystore.
+
+Release notes are worth writing properly: lead with the **exact error text** a user would
+have seen, so the person hitting it finds the build by searching for their own symptom.
+
 ## Debugging without a debugger
 
 There is no logcat. The app carries its own:
