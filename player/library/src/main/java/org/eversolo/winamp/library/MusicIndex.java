@@ -28,6 +28,11 @@ public final class MusicIndex {
         }
 
         /** Best available quality label across the album, for the browser list. */
+        @Override
+        public String toString() {
+            return artist + " - " + name + (year == null ? " (undated)" : " (" + year + ")");
+        }
+
         public String qualityLabel() {
             return tracks.isEmpty() ? "" : tracks.get(0).qualityLabel();
         }
@@ -59,7 +64,21 @@ public final class MusicIndex {
             a.tracks.add(t);
         }
 
-        Comparator<Track> trackOrder = (x, y) -> {
+        for (Map.Entry<String, Map<String, Album>> e : grouped.entrySet()) {
+            List<Album> list = new ArrayList<>(e.getValue().values());
+            for (Album a : list) Collections.sort(a.tracks, trackOrder());
+            Collections.sort(list, albumOrder());
+            albumsByArtist.put(e.getKey(), list);
+            artists.add(e.getKey());
+        }
+    }
+
+    /**
+     * Disc, then track number, then file name. Missing values become concrete ones rather
+     * than being skipped over, which is what keeps this a total order - see albumOrder().
+     */
+    public static Comparator<Track> trackOrder() {
+        return (x, y) -> {
             int dx = x.discNumber == null ? 1 : x.discNumber;
             int dy = y.discNumber == null ? 1 : y.discNumber;
             if (dx != dy) return Integer.compare(dx, dy);
@@ -68,19 +87,30 @@ public final class MusicIndex {
             if (tx != ty) return Integer.compare(tx, ty);
             return x.fileName.compareToIgnoreCase(y.fileName);
         };
+    }
 
-        for (Map.Entry<String, Map<String, Album>> e : grouped.entrySet()) {
-            List<Album> list = new ArrayList<>(e.getValue().values());
-            for (Album a : list) Collections.sort(a.tracks, trackOrder);
-            Collections.sort(list, (x, y) -> {
-                if (x.year != null && y.year != null && !x.year.equals(y.year)) {
-                    return Integer.compare(x.year, y.year);
-                }
-                return x.name.compareToIgnoreCase(y.name);
-            });
-            albumsByArtist.put(e.getKey(), list);
-            artists.add(e.getKey());
-        }
+    /**
+     * By year, then by name, with undated albums last.
+     *
+     * The obvious version of this - compare years only when both are present, otherwise
+     * fall back to the name - is **not a valid ordering**, and it crashed a user's scan
+     * with "Comparison method violates its general contract!". Take 1990/"Zebra",
+     * undated/"Middle" and 2000/"Apple": the first is before the third by year, after the
+     * second by name, and the second is after the third by name. Sorting cannot satisfy
+     * all three at once, and above 32 elements TimSort notices and throws.
+     *
+     * A missing year has to become a real position in the order, not a reason to change
+     * how two albums are compared. Public and static so the tests can check the property
+     * directly, over every triple, rather than waiting for a large enough library to
+     * expose it.
+     */
+    public static Comparator<Album> albumOrder() {
+        return (x, y) -> {
+            int yx = x.year == null ? Integer.MAX_VALUE : x.year;
+            int yy = y.year == null ? Integer.MAX_VALUE : y.year;
+            if (yx != yy) return Integer.compare(yx, yy);
+            return x.name.compareToIgnoreCase(y.name);
+        };
     }
 
     public List<String> artists() { return artists; }

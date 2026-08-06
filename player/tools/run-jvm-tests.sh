@@ -5,7 +5,7 @@
 # Anything that can be proven on a laptop should be proven on a laptop. These cover the
 # parsers and the playlist model, which is where the subtle bugs live.
 #
-# 224 assertions total, all expected to pass:
+# 339 assertions total, all expected to pass:
 #   TagTest               41  FLAC + ID3 tag parsing against real ffmpeg-generated files
 #   M3uTest               17  .m3u parsing: Windows paths, CRLF, BOM, unicode, Latin-1, URLs
 #   PlaylistTest          23  playlist model, incl. index bookkeeping around the playing track
@@ -13,6 +13,7 @@
 #                             the MISC OPTS fly-out, for the playlist and browser windows
 #   FftTest               22  the analyser's maths against sine waves of known pitch
 #   SequencerTest         16  the track-to-track handover and the two ways to move the playhead
+#   IndexTest             10  album and track ordering, and that the comparators are legal
 #   SkinFinderTest        20  the skin walk, against a real directory tree on disk
 #   LrcTest               33  .lrc parsing and "which line is being sung"
 #
@@ -73,6 +74,8 @@ printf '#EXTM3U\n#EXTINF:60,Caf\xe9 del Mar\n../Leonard Cohen/[M] Old Ideas [325
 SRC="$BUILD/sources.txt"
 find "$HERE/tags/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' > "$SRC"
 echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/Track.java\"" >> "$SRC"
+# MusicIndex is plain Java too - and a user's scan died inside its comparator.
+echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/MusicIndex.java\"" >> "$SRC"
 # The skin walk carries no Android imports either, so the tree it walks can be a real one.
 echo "\"$HERE/library/src/main/java/org/eversolo/winamp/library/SkinFinder.java\"" >> "$SRC"
 echo "\"$HERE/playlist/src/main/java/org/eversolo/winamp/playlist/Playlist.java\"" >> "$SRC"
@@ -95,14 +98,14 @@ echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/WindowScales.java\"" >
 echo "\"$HERE/skin/src/main/java/org/eversolo/winamp/skin/LyricsGeometry.java\"" >> "$SRC"
 # :dsp is plain Java for exactly this reason - the analyser's maths is provable here.
 find "$HERE/dsp/src/main/java" -name "*.java" -print0 | xargs -0 -I{} echo '"{}"' >> "$SRC"
-for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest SkinFinderTest LrcTest; do
+for t in TagTest M3uTest PlaylistTest PlaylistGeometryTest FftTest SequencerTest IndexTest SkinFinderTest LrcTest; do
   echo "\"$HERE/tools/jvm-tests/$t.java\"" >> "$SRC"
 done
 
 "$JAVAC" -encoding UTF-8 -nowarn -d "$BUILD/classes" @"$SRC"
 
 fail=0
-for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest" "SkinFinderTest" "LrcTest"; do
+for t in "TagTest $FIXTURES/root" "M3uTest $FIXTURES/root" "PlaylistTest" "PlaylistGeometryTest" "FftTest" "SequencerTest" "IndexTest" "SkinFinderTest" "LrcTest"; do
   set -- $t
   echo; echo "=== $1 ==="
   "$JAVA" -Dfile.encoding=UTF-8 -Dplayer.dir="$HERE" -cp "$BUILD/classes" "$@" || fail=1

@@ -113,8 +113,14 @@ public final class Playlist {
                 if (c != 0) return c;
                 c = a.album.compareToIgnoreCase(b.album);
                 if (c != 0) return c;
-                Integer an = a.trackNumber, bn = b.trackNumber;
-                if (an != null && bn != null && !an.equals(bn)) return an - bn;
+                // Missing track numbers sort last rather than changing how two tracks are
+                // compared. Skipping the comparison when either is absent makes the
+                // ordering intransitive, which above 32 tracks makes SORT LIST throw - the
+                // same defect that killed a user's library scan. Integer.compare rather
+                // than subtraction, while we are here.
+                int an = a.trackNumber == null ? Integer.MAX_VALUE : a.trackNumber;
+                int bn = b.trackNumber == null ? Integer.MAX_VALUE : b.trackNumber;
+                if (an != bn) return Integer.compare(an, bn);
                 return a.title.compareToIgnoreCase(b.title);
             }
         };

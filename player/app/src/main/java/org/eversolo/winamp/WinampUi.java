@@ -1252,7 +1252,11 @@ public final class WinampUi implements PlaybackEngine.Listener, Playlist.Listene
                 if (missing > 0) sb.append(", ").append(missing).append(" missing");
                 if (urls > 0) sb.append(", ").append(urls).append(" web links skipped");
                 if (unknown > 0) sb.append(", ").append(unknown).append(" not in library");
-                toast(sb.toString());
+                // In the window, not a Toast: this is an overlay drawn above everything, so
+                // a Toast renders behind it and is no feedback at all. An import that
+                // resolved nothing looked exactly like nothing happening.
+                if (browserOpen) browserWindow.flash(sb.toString());
+                else mainWindow.flashTitle(sb.toString());
             });
         }, "m3u-import").start();
     }

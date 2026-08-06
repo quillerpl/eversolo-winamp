@@ -28,6 +28,24 @@ assertions against real ffmpeg-generated files.
 are only reachable through a search capped at 30 results, and its queue IDs are hashes that
 differ from them for the same track.
 
+## Ordering, and why it once killed the scan
+
+Albums are ordered by year then name, tracks by disc then track number then file name —
+`MusicIndex.albumOrder()` and `trackOrder()`, both public and static so the tests can check
+them directly.
+
+**A missing value must become a position in the order, never a reason to compare two items
+differently.** The obvious version — compare years only when both are present, otherwise
+fall back to the name — is not a valid ordering, and it crashed a user's scan outright with
+`Comparison method violates its general contract!`. Take 1990/"Zebra", undated/"Middle" and
+2000/"Apple": the first is before the third by year, after the second by name, and the
+second is after the third by name. No arrangement satisfies all three.
+
+Java only notices above 32 elements, and only sometimes, so this survived months and a
+3,500-track library before failing on somebody else's. `IndexTest` therefore checks the
+*property* — antisymmetric and transitive over every triple — rather than sorting something
+and hoping. Undated albums and unnumbered tracks sort last.
+
 ## The browser
 
 `LibraryBrowser` (`:app`) is the model behind `BrowserWindowView`: it decides what the rows
